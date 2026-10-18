@@ -18,3 +18,10 @@ mb2
 *.local.props
 *.local.json
 .env
+
+# Local tool binaries (ILSpy GUI etc.)
+ilspy/
+
+# Python cache
+__pycache__/
+*.pyc
