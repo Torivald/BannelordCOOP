@@ -69,14 +69,20 @@ A Mount & Blade II: Bannerlord co-op mod whose first target is **Battle Particip
 ## Companion mod: Diplomacy (ADR-0008)
 - Required compatibility with DiplomacyTeam/Bannerlord.Diplomacy (CC BY-NC-SA 4.0): read its source
   for compat work, **never copy its code** into this MIT repo; integrate at runtime only
-  (`src/BannerlordCoop.Compat.Diplomacy`, soft dependency). Disable it when testing core sync.
+  (`src/BannerCoopTW.Compat.Diplomacy`, soft dependency). Disable it when testing core sync.
 
-## Local model helper (optional)
-- `python tools/local_llm.py "<task>" <files>` sends large text to the local Ollama model and prints
-  a short answer; `--check` verifies setup. Use it for first-pass triage of big logs or many
-  decompiled files so only the summary enters context. Treat output as an unverified draft: confirm
-  any identifier/fact by grep before relying on it. Never use it for decisions, ADRs or final code.
-  If Ollama is not running, skip it and work normally.
+## Local model first (qwen3.5:9b via Ollama) — skill `local-delegate`
+- Bulk reading and bulk routine writing go to the local model by default:
+  `python tools/local_llm.py "<task>" <files>` (extract → short answer) or
+  `python tools/local_llm.py --draft --out .local-llm/out/<file> "<spec>" <files>` (drafts).
+- Delegate: logs/build/test output > ~100 lines, decompiled files > ~300 lines or > 2 files,
+  test scaffolds, boilerplate C#/XML/csproj, doc drafts, commit/PR text, translations.
+- Never delegate: decisions, ADRs, plans, CURRENT_STATE, networking/authority/allocation logic,
+  Harmony patches, final review, anything from `BannerlordCoop-development/`. Small tasks
+  (< ~100 lines in, < ~40 lines out) — do directly.
+- Output is an unverified draft: grep-confirm identifiers, build + test generated code.
+  If the script prints `LOCAL_LLM_UNAVAILABLE`, work normally.
+- Note what was delegated in the task summary; `python tools/local_llm.py --stats` shows totals.
 
 ## Open architecture choice (ADR-0006, must be decided after Phase 2 research)
 
@@ -102,12 +108,12 @@ A Mount & Blade II: Bannerlord co-op mod whose first target is **Battle Particip
 | Plans | `docs/plans/MVP_ROADMAP.md` |
 | Decompiled game | `_decompiled/<version>/` (ignored) |
 
-Planned source layout (create when Phase 1 starts):
-`src/BannerlordCoop.Core` (pure C#, unit-testable allocation/reservations),
-`src/BannerlordCoop.Networking`, `src/BannerlordCoop.Battle` (Mission adapters),
-`src/BannerlordCoop.UI` (Gauntlet), `src/BannerlordCoop.Module` (SubModule entry),
-`tests/BannerlordCoop.Core.Tests`.
-Rename the mod/module ID to something distinct from "Coop" (avoid clashing with BannerlordCoop).
+Source layout (ADR-0009, module ID **`BannerCoopTW`**, all projects prefixed `BannerCoopTW.`):
+`src/BannerCoopTW.Core` (netstandard2.0, pure C#, unit-testable allocation/reservations) ✅,
+`src/BannerCoopTW.Module` (net472, SubModule entry → `BannerCoopTW.dll`) ✅,
+`tests/BannerCoopTW.Core.Tests` ✅; later `src/BannerCoopTW.Networking`,
+`src/BannerCoopTW.Battle` (Mission adapters), `src/BannerCoopTW.UI` (Gauntlet).
+Build/deploy: README "Building"; compile only against BUTR reference assemblies of the exact build.
 
 ## Session protocol
 
@@ -125,7 +131,7 @@ End: summarise changes, unresolved assumptions, tests actually run; update CURRE
 - Project default model is `opusplan` (`.claude/settings.json`): plan mode runs on Opus, execution on Sonnet.
   For any non-trivial task, start in plan mode (Shift+Tab), approve the plan, execution switches to Sonnet.
 - Delegate by subagent (`.claude/agents/`), each pinned to a model:
-  `bannerlord-researcher` (Sonnet) API lookups · `log-triage` (Haiku) logs/build output ·
+  `bannerlord-researcher` (Sonnet) API lookups · `log-triage` (Haiku, local model first) logs/build output ·
   `implementer` (Sonnet) specified coding · `architect-reviewer` (Opus) ADRs, hard debugging, milestone review.
 - At the start of a task, if the current main model is clearly mismatched (e.g. Opus outside plan mode
   for routine edits, or Haiku/Sonnet for an architecture decision), say so in one line and suggest the

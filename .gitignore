@@ -25,3 +25,9 @@ ilspy/
 # Python cache
 __pycache__/
 *.pyc
+
+# Local LLM scratch (task files, drafts, usage log)
+.local-llm/
+
+# Test output
+TestResults/

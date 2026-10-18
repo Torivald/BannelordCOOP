@@ -29,6 +29,24 @@ The project is developed in small vertical milestones:
 11. Persistence/reconnect
 12. Hardening and performance
 
+## Building
+
+Module ID: `BannerCoopTW` (ADR-0009). Requires .NET SDK 8+ and Bannerlord 1.4.8 (+ `Bannerlord.Harmony`).
+
+```powershell
+dotnet build BannerCoopTW.sln -c Release     # compiles against BUTR reference assemblies, no game needed
+dotnet test  BannerCoopTW.sln -c Release
+
+# local deploy into the game (once): junction mb2 -> game folder (git-ignored)
+.\tools\dev\setup-junction.ps1 -GamePath "<path>\Mount & Blade II Bannerlord"
+.\tools\dev\deploy.ps1                       # build + copy to Modules\BannerCoopTW
+.\tools\dev\run-game.ps1                     # start with Harmony + native modules + BannerCoopTW
+```
+
+Mod log: `Documents\Mount and Blade II Bannerlord\Logs\BannerCoopTW\`,
+config: `Documents\Mount and Blade II Bannerlord\Configs\BannerCoopTW\config.ini`.
+CI (`.github/workflows/build.yml`) builds, tests and uploads the packaged module as an artifact.
+
 ## Documentation
 
 See:
