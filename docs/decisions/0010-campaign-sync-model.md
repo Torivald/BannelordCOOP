@@ -16,10 +16,17 @@ for everyone during the single global battle. Research shows:
 1. **Host-authoritative**: exactly one process (the campaign host) simulates the campaign. Clients never
    simulate; their campaign tick is suppressed (patched `Campaign.RealTick`/`TickMapTime` → dt = 0 and AI
    off) and they only render, interpolate and run UI.
-2. **Initial sync and resync = save transfer**: on join, reconnect and **before every battle** the host
-   captures the world with a capturing `ISaveDriver` and sends it (compressed) to all clients, which load it
-   (`SaveManager.Load` → `SandBoxGameManager(LoadResult)` or an in-place reload). Pre-battle resync
-   guarantees an identical world for ADR-0006 (MBGUID parity, gate S1).
+2. **Initial sync and resync = save transfer**: on join and reconnect the host captures the world with a
+   capturing `ISaveDriver` and sends it (compressed) to the client, which loads it
+   (`SaveManager.Load` → `SandBoxGameManager(LoadResult)` or an in-place reload).
+   **Before a battle the resync is conditional** (amended 2026-10-18): the host broadcasts a world
+   checksum (hash over the objects a battle needs: participating parties' rosters/equipment, heroes,
+   MBGUID registration order — exact set defined by spike S1); every client compares it with its own and
+   reports. Only clients whose checksum differs get the save transfer + reload; if all match, the battle
+   starts immediately. A full forced resync is still available (host command / periodic safety net).
+   Rationale: a 6–8 MB transfer + world reload on every encounter (incl. bandit skirmishes) could cost
+   20–60 s per battle. Spike S1 must measure capture, transfer and load times and confirm that
+   a matching checksum is sufficient for MBGUID parity (ADR-0006).
 3. **Between resyncs: state deltas** at a fixed rate (e.g. 5–10 Hz) for what clients must see live:
    mobile party positions/targets/states, map events start/end, settlement ownership/sieges, player
    parties' rosters/gold/inventory, time & pause. Everything else waits for the next resync.
@@ -48,5 +55,6 @@ for everyone during the single global battle. Research shows:
 
 ## Open questions (Phase 5a spikes)
 - Can a client switch its main hero after loading a host save without side effects?
-- In-place reload vs full game restart for pre-battle resync (time, UI flicker).
+- In-place reload vs full game restart for resync (time, UI flicker).
+- Checksum scope for the pre-battle check (what must match for MBGUID parity) and its cost to compute.
 - Minimum delta set for a playable map view.

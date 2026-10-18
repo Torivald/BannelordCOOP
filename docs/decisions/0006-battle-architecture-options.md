@@ -27,6 +27,8 @@ AuthToken, has no SandBoxCore scenes/campaign objects, cannot host the campaign)
 ### Gates (must pass before Phase 6 commits to B; run as Phase 2b/4 spikes)
 - **S1 — MBGUID parity**: same save loaded on two instances → identical MBGUIDs for heroes, troops, items
   (incl. crafted). Fail → GUID remap layer or registration of battle objects in fixed order; if impossible → A.
+  S1 also measures save capture/transfer/load times and validates the pre-battle checksum scope
+  (ADR-0010 §2: resync only on checksum mismatch).
 - **S2 — listen server in campaign**: host in campaign starts `StartMultiplayerOnServer`, opens a minimal
   networked battle mission; instance 2 connects via `AddNewPlayerOnServer` + `StartMultiplayerOnClient`
   (no TaleWorlds lobby) and sees agents. Fail → A.
