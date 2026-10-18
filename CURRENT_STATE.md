@@ -4,7 +4,7 @@ Last updated: 2026-10-18 (Phase 1 mod shell)
 
 ## Phase
 
-1 — Mod shell — **DONE except CI confirmation** (PR `phase1/mod-shell`) → next: Phase 2
+1 — Mod shell — **DONE** (PR #2, CI green) → next: Phase 2
 
 ## Completed
 
@@ -34,7 +34,7 @@ Last updated: 2026-10-18 (Phase 1 mod shell)
 | Writes own log | PASS | `Documents\…\Logs\BannerCoopTW\BannerCoopTW_20261018_190012.log` (load, main menu, unload) |
 | Config created | PASS | `Documents\…\Configs\BannerCoopTW\config.ini` |
 | Version shown in game | NOT CONFIRMED | `DisplayMessage` ran without error; message had faded before the screenshot |
-| CI green | see PR | workflow runs on the PR |
+| CI green | PASS | run 39134379296: build + test + artifact `BannerCoopTW-module` (1m18s); note: actions v4 run on forced Node 24 (deprecation warning) |
 | Two instances with the mod | NOT RUN | vanilla only (research 0001) |
 
 ## Verified
@@ -73,7 +73,7 @@ Details: `docs/research/0001-environment.md`, ADR-0009.
 
 ## Next actions
 
-1. Confirm CI green on the Phase 1 PR, merge.
+1. Review and merge PR #2.
 2. Phase 2: decompile 1.4.8 (ilspycmd), research notes 0002–0009, verdict on ADR-0006 A vs B
    (incl. Dedicated Server smoke test).
 3. Phase 3 (can run in parallel): Core allocation/reservation logic + tests.

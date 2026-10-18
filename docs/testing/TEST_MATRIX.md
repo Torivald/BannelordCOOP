@@ -18,7 +18,7 @@
 - [x] config.ini created with defaults
 - [ ] "loaded" message visually confirmed in game (DisplayMessage called without error; message had faded before screenshot)
 - [ ] module loads in two instances at once
-- [ ] CI green on GitHub Actions
+- [x] CI green on GitHub Actions (run 39134379296)
 
 ## Networking
 
