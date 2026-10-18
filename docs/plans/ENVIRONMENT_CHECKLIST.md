@@ -22,8 +22,7 @@
 | .NET Framework 4.7.2 Developer Pack | ✅ | `Reference Assemblies\...\v4.7.2` есть |
 | ilspycmd | ✅ 9.1.0.7988 | установлен на .NET 8 SDK |
 | ILSpy (GUI) | ❓ | рекомендую поставить (удобно смотреть типы руками) |
-| IDE | ⚠ только VS Code | **Это не расширение VS Code**: «.NET desktop development» — компонент установщика *Visual Studio 2022* (отдельная программа, visualstudio.microsoft.com). |
-| (старое) | **Рекомендую Visual Studio 2022 Community** (нагрузка «.NET desktop development») — нужна для отладки с подключением к `Bannerlord.exe`. Альтернатива: VS Code + C# Dev Kit (сборка да, отладка .NET Framework — нет) |
+| IDE | ⚠ только VS Code | **Установить Visual Studio 2022 Community** (отдельная программа, visualstudio.microsoft.com) и в её установщике выбрать нагрузку «.NET desktop development». Это не расширение VS Code. Нужна для отладки с подключением к `Bannerlord.exe`. |
 | Git | ✅ | `C:\Program Files\Git` |
 | Python | ✅ | есть (для вспомогательных скриптов) |
 | Node.js | ❌ | нужен плагинам Claude (gitkraken, pdf) — поставить Node.js LTS, если нужны плагины |
