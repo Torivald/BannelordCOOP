@@ -24,8 +24,10 @@ Details and sources: `docs/research/0001-environment.md`.
 - Game path: `E:\SteamLibrary\steamapps\common\Mount & Blade II Bannerlord`
 - Client **v1.4.8.119303** (Steam build 24573425, branch public); modding tools v1.4.8
 - Dedicated Server installed (app 1863440, build 24571419), Native/Multiplayer modules v1.4.8;
-  server runs on **.NET 6** (system runtime 6.0.36)
-- **Steam client runs mods on Mono** (log `Mono Loading Step`) → client module targets `net472`
+  server runs on **.NET 6** (bundles coreclr 6.0.12; system 6.0.36 also installed)
+- **Steam client hosts mods on the .NET Framework 4.x CLR** (verified via loaded modules:
+  clr.dll + Framework native images; `Mono Loading Step` log lines are misleading) → client
+  module targets `net472`; VS managed debugging should be possible
 - TaleWorlds assemblies target .NET Standard 2.0
 - Modules present: Native, SandBoxCore, SandBox, StoryMode, CustomBattle, Multiplayer,
   BirthAndDeath, FastMode; Workshop: Harmony 2.4.2.248, UIExtenderEx 3.0.3, ButterLib 2.12.0,
@@ -52,7 +54,7 @@ Details and sources: `docs/research/0001-environment.md`.
 
 - Dedicated Server starts locally and accepts a 1.4.8 client (needs server token)
 - Custom module loadable on the Dedicated Server
-- Debugger attach to the Mono client (IDE choice depends on it)
+- VS debugger attach to `Bannerlord.exe` (.NET Framework 4.x) with a mod loaded
 - Two instances inside a mission simultaneously (performance)
 - Mission/Agent APIs for control, death, reinforcements
 
