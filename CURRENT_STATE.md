@@ -1,6 +1,6 @@
 # Current State — Bannerlord Co-op
 
-Last updated: 2026-10-18 (Phase 2 research, Gate G1)
+Last updated: 2026-10-18 (mods cleaned; GAME_GUIDE + session resume spec)
 
 ## Phase
 
@@ -17,6 +17,8 @@ Last updated: 2026-10-18 (Phase 2 research, Gate G1)
 - ADR-0004 (reference-mod license), ADR-0005 (decompilation), ADR-0006 (battle architecture —
   **B-listen, provisional**), ADR-0007 (product scope), ADR-0008 (Diplomacy integration),
   ADR-0009 (module ID/layout), **ADR-0010** (campaign sync), **ADR-0011** (hosting), **ADR-0012** (transport).
+- Player guide `docs/GAME_GUIDE.md` (RU) + `docs/architecture/SESSION_RESUME.md` (resume from save: paused until
+  heroes reclaimed, absent players → bot), PR #4.
 - Phase 0 environment research: `docs/research/0001-environment.md` (PR #1, merged).
 - Project skills in `.claude/skills/` (mvp-check, bannerlord-research, coop-architecture,
   local-delegate); local model helper `tools/local_llm.py` (Ollama qwen3.5:9b).
@@ -81,9 +83,13 @@ Details: `docs/research/0001-environment.md`, ADR-0009.
 - BUTR `Bannerlord.ReferenceAssemblies.*` **1.4.8.119303** on NuGet = exact client build
 - Direct launch `Bannerlord.exe /singleplayer _MODULES_*…*BannerCoopTW*_MODULES_` resolves
   Workshop modules (Harmony loaded from Workshop)
-- **Workshop now has duplicate module IDs**: Harmony (2859188632 v2.4.2.248 and 3747619959
-  v2.4.99.0), UIExtenderEx (v3.0.3 / v2.14.99.0), ButterLib (v2.12.0 / v2.10.99.0), plus MCM
-  v5.11.99.0 (3747620191). The game picked Harmony **v2.4.99.0** (3747619959) in the test run.
+- **Mods (cleaned 2026-10-18)**: Workshop = official BUTR Harmony v2.4.2.248 (2859188632), UIExtenderEx
+  v3.0.3 (2859222409), ButterLib v2.12.0 (2859232415) + Diplomacy v1.5.4 (2881380744); re-uploads 3747… unsubscribed
+  and removed; **MCM v5.13.1 from Nexus (mod 612) in game `Modules/Bannerlord.MBOptionScreen`** (Steam copy
+  unsubscribed). Test run (rgl_log_13668): all load with BannerCoopTW, Diplomacy picks `Bannerlord.Diplomacy.1.4.8.dll`
+  ("Loaded Diplomacy v1.5.4!"), main menu in 35 s, `rgl_log_errors` empty. ButterLib log shows two non-blocking ERRs:
+  MCM loader "MBSubModuleBaseSimpleWrapper … could not be converted to a delegate" and a patch target
+  `CampaignBehaviorManager.OnGameLoaded` not found in 1.4.8 (impact in campaign unknown).
 - Tooling: .NET SDK 8.0.426 + **10.0.402**; Visual Studio Community 2026 (18.11.0); `gh` 2.102.0
   (logged in, not on the bash PATH); ilspycmd 9.1; Git 2.55.0; Python 3.12.10; Ollama 0.40.5 + qwen3.5:9b
 - Logs: game `C:\ProgramData\Mount and Blade II Bannerlord\logs` (old logs pruned at startup,
@@ -94,8 +100,7 @@ Details: `docs/research/0001-environment.md`, ADR-0009.
 
 ## Blockers (user action)
 
-1. Decide which duplicate Workshop modules to keep (Harmony/UIExtenderEx/ButterLib: original
-   BUTR items 2859… vs 3747… "x.99" items). Two copies with one ID make load order unpredictable.
+~~1. Duplicate Workshop modules~~ resolved (official BUTR kept, MCM from Nexus).
 2. Optional: add `C:\Program Files\GitHub CLI` to PATH for shells.
 
 ## Not yet verified
@@ -106,6 +111,7 @@ Details: `docs/research/0001-environment.md`, ADR-0009.
 - **S1** MBGUID parity after loading the same save on two instances (ADR-0006 gate)
 - **S2** listen server started inside a campaign + second instance joins without the TaleWorlds lobby (ADR-0006 gate)
 - Client main-hero switch after loading host save (ADR-0010)
+- **S3** vanilla character creation mid-campaign for a late joiner (SESSION_RESUME; feature may be disabled if it fails)
 - Steam lobby/P2P from the mod (needs second Steam account/PC)
 
 ## Next actions

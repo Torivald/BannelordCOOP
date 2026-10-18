@@ -39,6 +39,7 @@ for everyone during the single global battle. Research shows:
 - Each player simulating "their" region: no authority, conflicting writes.
 
 ## Consequences
+- Resume after interruption: player↔hero mapping is saved; host waits paused for reclaims, absent heroes run on AI — `docs/architecture/SESSION_RESUME.md`.
 - Biggest work: client tick suppression without breaking UI; delta replication schema; command coverage
   of all player actions (long tail).
 - Join/battle latency includes a 6–8 MB save transfer + load (measure in Phase 5a; compress; consider
