@@ -11,17 +11,19 @@
 | Mount & Blade II Dedicated Server | ✅ установлен | версию сверить с клиентом (1.4.8) в Phase 0 |
 | Логи игры | ✅ папка есть | `C:\ProgramData\Mount and Blade II Bannerlord\logs` |
 | War Sails DLC | ✅ не установлен | хорошо — меньше несовместимостей |
-| Bannerlord.Harmony (Workshop) | ❓ | в `Modules` игры нет; подписаться в Workshop, проверить в лаунчере |
+| Bannerlord.Harmony (Workshop) | ✅ v2.4.2.248 | + ButterLib v2.12.0, UIExtenderEx v3.0.3 |
+| Diplomacy (Workshop) | ✅ v1.5.4 | требуемая совместимость (ADR-0008); при тестах ядра синхронизации — отключать |
+| MCM — Mod Configuration Menu (Workshop) | ❌ | **нужен Diplomacy** (≥5.12.3) — подписаться в Workshop |
 
 ## Инструменты разработки
 
 | Компонент | Статус | Что сделать |
 |---|---|---|
-| .NET SDK | ⚠ только 8.0.426 | **Установить .NET 10 SDK** (нужен для ilspycmd; 8 оставить) |
+| .NET SDK | ✅ 8.0.426 | достаточно (ilspycmd 9.1 работает) |
 | .NET Framework 4.7.2 Developer Pack | ✅ | `Reference Assemblies\...\v4.7.2` есть |
-| ilspycmd | ❌ | после .NET 10 SDK: `dotnet tool uninstall -g ilspycmd` → `dotnet tool install -g ilspycmd` |
+| ilspycmd | ✅ 9.1.0.7988 | установлен на .NET 8 SDK |
 | ILSpy (GUI) | ❓ | рекомендую поставить (удобно смотреть типы руками) |
-| IDE | ⚠ только VS Code | **Рекомендую Visual Studio 2022 Community** (нагрузка «.NET desktop development») — нужна для отладки с подключением к `Bannerlord.exe`. Альтернатива: VS Code + C# Dev Kit (сборка да, отладка .NET Framework — нет) |
+| IDE | ⚠ только VS Code | **Установить Visual Studio 2022 Community** (отдельная программа, visualstudio.microsoft.com) и в её установщике выбрать нагрузку «.NET desktop development». Это не расширение VS Code. Нужна для отладки с подключением к `Bannerlord.exe`. |
 | Git | ✅ | `C:\Program Files\Git` |
 | Python | ✅ | есть (для вспомогательных скриптов) |
 | Node.js | ❌ | нужен плагинам Claude (gitkraken, pdf) — поставить Node.js LTS, если нужны плагины |
@@ -32,10 +34,11 @@
 | Компонент | Статус | Что сделать |
 |---|---|---|
 | Claude GitHub App на `Torivald/BannelordCOOP` | ✅ | push из облачной сессии работает |
-| Claude Code (Windows) | ⚠ установлен, не в PATH | добавить `C:\Users\Torivald\.local\bin` в PATH пользователя, перезапустить терминал |
+| Claude Code (Windows) | ✅ v2.1.302 | запускается из `E:\Claude Bannerlord` |
 | Локальная папка как Git-репо | ❌ | см. «Шаги» ниже |
 | Навыки bannerlord-research / coop-architecture / mvp-check | ✅ | сохранены |
 | Память проекта + документы проекта claude.ai | ✅ | |
+| Ollama + локальная модель | ❌ | установить Ollama, `ollama pull` модели; проверка: `python tools/local_llm.py --check` |
 | MCP-серверы | не нужны | 0 внешних MCP — осознанно (ADR-0001) |
 
 ## Для тестов с 4 игроками (понадобится с Phase 4–5)

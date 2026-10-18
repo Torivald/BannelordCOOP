@@ -66,6 +66,18 @@ A Mount & Blade II: Bannerlord co-op mod whose first target is **Battle Particip
 - No machine paths or secrets in committed code (use a `mb2` junction / local props file).
 - Update `CURRENT_STATE.md` after every milestone. Never claim a test passed unless it ran.
 
+## Companion mod: Diplomacy (ADR-0008)
+- Required compatibility with DiplomacyTeam/Bannerlord.Diplomacy (CC BY-NC-SA 4.0): read its source
+  for compat work, **never copy its code** into this MIT repo; integrate at runtime only
+  (`src/BannerlordCoop.Compat.Diplomacy`, soft dependency). Disable it when testing core sync.
+
+## Local model helper (optional)
+- `python tools/local_llm.py "<task>" <files>` sends large text to the local Ollama model and prints
+  a short answer; `--check` verifies setup. Use it for first-pass triage of big logs or many
+  decompiled files so only the summary enters context. Treat output as an unverified draft: confirm
+  any identifier/fact by grep before relying on it. Never use it for decisions, ADRs or final code.
+  If Ollama is not running, skip it and work normally.
+
 ## Open architecture choice (ADR-0006, must be decided after Phase 2 research)
 
 - **A. Custom netcode over single-player missions** (custom transport e.g. LiteNetLib, Harmony
@@ -108,6 +120,16 @@ End: summarise changes, unresolved assumptions, tests actually run; update CURRE
   web research, docs. Cannot build or run Windows tools unless a device shell is available.
 - **Local Claude Code on Windows** (recommended for Phase 1+): needed for `dotnet build`,
   MSBuild, ilspycmd, launching the game, reading logs, Git.
+
+## Model routing (local Claude Code)
+- Project default model is `opusplan` (`.claude/settings.json`): plan mode runs on Opus, execution on Sonnet.
+  For any non-trivial task, start in plan mode (Shift+Tab), approve the plan, execution switches to Sonnet.
+- Delegate by subagent (`.claude/agents/`), each pinned to a model:
+  `bannerlord-researcher` (Sonnet) API lookups · `log-triage` (Haiku) logs/build output ·
+  `implementer` (Sonnet) specified coding · `architect-reviewer` (Opus) ADRs, hard debugging, milestone review.
+- At the start of a task, if the current main model is clearly mismatched (e.g. Opus outside plan mode
+  for routine edits, or Haiku/Sonnet for an architecture decision), say so in one line and suggest the
+  exact command (`/model sonnet`, `/model opusplan`, `/model opus`) before continuing.
 
 ## Token / context discipline (Claude Pro)
 
