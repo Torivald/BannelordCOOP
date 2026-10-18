@@ -1,18 +1,22 @@
 # Current State — Bannerlord Co-op
 
-Last updated: 2026-10-18 (Phase 1 mod shell)
+Last updated: 2026-10-18 (Phase 2 research, Gate G1)
 
 ## Phase
 
-1 — Mod shell — **DONE** (PR #2, CI green) → next: Phase 2
+2 — API research — **DONE on paper, gates S1/S2 open** (PR `phase2/research`, stacked on PR #2)
+→ next: Phase 2b spikes S1/S2, Phase 3 core in parallel
+
+(Phase 1 — mod shell — DONE, PR #2)
 
 ## Completed
 
 - Project concept and Battle Participation spec defined.
 - Initial review: `docs/research/0000-initial-review.md`; CLAUDE.md v2 (old one in `docs/archive/`).
 - Master plan `docs/plans/MASTER_PLAN.md`, checklist `docs/plans/ENVIRONMENT_CHECKLIST.md`.
-- ADR-0004 (reference-mod license), ADR-0005 (decompilation), ADR-0006 (battle architecture, OPEN),
-  ADR-0007 (product scope), ADR-0008 (Diplomacy integration).
+- ADR-0004 (reference-mod license), ADR-0005 (decompilation), ADR-0006 (battle architecture —
+  **B-listen, provisional**), ADR-0007 (product scope), ADR-0008 (Diplomacy integration),
+  ADR-0009 (module ID/layout), **ADR-0010** (campaign sync), **ADR-0011** (hosting), **ADR-0012** (transport).
 - Phase 0 environment research: `docs/research/0001-environment.md` (PR #1, merged).
 - Project skills in `.claude/skills/` (mvp-check, bannerlord-research, coop-architecture,
   local-delegate); local model helper `tools/local_llm.py` (Ollama qwen3.5:9b).
@@ -36,6 +40,36 @@ Last updated: 2026-10-18 (Phase 1 mod shell)
 | Version shown in game | NOT CONFIRMED | `DisplayMessage` ran without error; message had faded before the screenshot |
 | CI green | PASS | run 39134379296: build + test + artifact `BannerCoopTW-module` (1m18s); note: actions v4 run on forced Node 24 (deprecation warning) |
 | Two instances with the mod | NOT RUN | vanilla only (research 0001) |
+
+## Phase 2 — results (2026-10-18)
+
+Decompiled 1.4.8 client + dedicated-server assemblies to `_decompiled/1.4.8/` (git-ignored, 18 assemblies).
+Notes: 0002 time · 0003 battle start · 0004 mission/agents · 0005 native MP · 0006 saves · 0007 Steam ·
+0008 threading · 0009 Diplomacy.
+
+| Operation | Verdict | Where |
+|---|---|---|
+| Lock campaign at 1x / global pause | API (`SpeedUpMultiplier`, `SetTimeControlModeLock`, `TimeControlMode`) | 0002 |
+| Campaign lockstep | Impossible (real-frame dt, global RNG, parallel tick) → host-authoritative | 0002, ADR-0010 |
+| Suppress client campaign tick | Patch (`Campaign.RealTick`/`TickMapTime`) | 0002 |
+| Intercept battle start | API (`CampaignEvents.MapEventStarted`, replaceable `CampaignMissionManager`) + patch (`EncounterAttackConsequence`) | 0003 |
+| Sides/parties/heroes for slots | API (`MapEvent.AttackerSide/DefenderSide.Parties`) | 0003 |
+| Filter which troops AI spawns | API (`PartyGroupTroopSupplier` custom allocation filter) | 0003 |
+| Switch controlled agent (SP) | API (`Agent.Controller`, `Mission.MainAgent`) | 0004 |
+| Knock-out instead of death | API (replace `AgentDecideKilledOrUnconsciousModel`) | 0004 |
+| Reinforcements / battle size | API (`DefaultBattleMissionAgentSpawnLogic`, `BannerlordConfig.BattleSize`) | 0004 |
+| Listen server from game client | API (`GameNetwork.StartMultiplayerOnServer` → `MultiClientServer`) — runtime unproven (S2) | 0005 |
+| Admit players without TaleWorlds lobby | API (`AddNewPlayerOnServer` + `StartMultiplayerOnClient`) — unproven (S2) | 0005 |
+| Replicate SP-spawned agents | API (SpawnAgent broadcasts `CreateAgent` when server) | 0004 |
+| Player takes an AI soldier / retake on death | API (`Mission.ReplaceBotWithPlayer`) | 0005 |
+| Campaign characters/items in MP | API by MBGUID reference — requires GUID parity (S1) | 0005 |
+| Campaign scenes in MP | Available on clients (SandBoxCore), not on dedicated server | 0005 |
+| Battle results back to campaign | API (`MapEventSide.OnTroopKilled/Wounded/Routed`) | 0003 |
+| Save → bytes → load on client | API (`ISaveDriver`, `GameData`, `SaveManager.Load`, `SandBoxGameManager(LoadResult)`) | 0006 |
+| Steam lobby/invite/P2P from a mod | API (Steamworks.NET 20.1.0 shipped) — untested | 0007 |
+| Native battle traffic over Steam | Not native; needs UDP tunnel (hypothesis) | 0007 |
+| Safe point for network input | API (`MBSubModuleBase.OnNetworkTick`, main-thread sync context) | 0008 |
+| Diplomacy compat | Type-level map; host-only behaviors, intercept actions | 0009 |
 
 ## Verified
 
@@ -69,14 +103,17 @@ Details: `docs/research/0001-environment.md`, ADR-0009.
 - "loaded" message visible in game; module in two instances at once
 - VS 2026 debugger attach to `Bannerlord.exe` (.NET Framework 4.x) with BannerCoopTW loaded
 - Dedicated Server starts locally and accepts a 1.4.8 client (needs server token); custom module on server
-- Mission/Agent APIs for control, death, reinforcements
+- **S1** MBGUID parity after loading the same save on two instances (ADR-0006 gate)
+- **S2** listen server started inside a campaign + second instance joins without the TaleWorlds lobby (ADR-0006 gate)
+- Client main-hero switch after loading host save (ADR-0010)
+- Steam lobby/P2P from the mod (needs second Steam account/PC)
 
 ## Next actions
 
-1. Review and merge PR #2.
-2. Phase 2: decompile 1.4.8 (ilspycmd), research notes 0002–0009, verdict on ADR-0006 A vs B
-   (incl. Dedicated Server smoke test).
-3. Phase 3 (can run in parallel): Core allocation/reservation logic + tests.
+1. Review and merge PR #2, then the Phase 2 PR.
+2. Phase 2b spikes (in BannerCoopTW.Module, debug-only): S1 GUID dump on two instances with the same save;
+   S2 listen server in campaign + join from instance 2. Result decides ADR-0006 B vs A.
+3. Phase 3 (parallel): Core allocation/reservation logic + tests (independent of A/B).
 
 ## Do not do yet
 

@@ -1,6 +1,42 @@
 # ADR-0006: Battle transport — custom netcode vs native multiplayer stack
 
-Status: OPEN — decide after Phase 2 (battle API research) · 2026-10-18
+Status: **Accepted (provisional) — Option B as a listen server inside the campaign ("B-listen")**,
+gated by spikes S1 + S2 below; Option A is the fallback · decided 2026-10-18 after Phase 2
+(research 0003, 0004, 0005).
+
+## Decision (Phase 2 verdict)
+Run campaign battles on the **native multiplayer stack, hosted by the campaign host's own game process**:
+the host keeps its campaign `Game`, calls `GameNetwork.StartMultiplayerOnServer(port)` (client builds run
+this as `MultiClientServer` = listen server, 0005), opens the campaign battle mission with its normal SP
+battle behaviors plus the MP network behaviors; the other co-op players (who run the same synced campaign)
+join with `GameNetwork.StartMultiplayerOnClient(...)`. Players take slots via
+`Mission.ReplaceBotWithPlayer(agent, peer)`; casualties go back through `MapEventSide.OnTroop*` locally on
+the host (0003). The Dedicated Server variant of B is **rejected for the MVP** (needs TaleWorlds lobby +
+AuthToken, has no SandBoxCore scenes/campaign objects, cannot host the campaign).
+
+### Evidence
+| ADR question | Answer (1.4.8) | Source |
+|---|---|---|
+| 1. Spawn campaign characters/equipment in MP | Yes, `CreateAgent` carries any `BasicCharacterObject` + equipment **by MBGUID reference** → requires identical object registration on all machines; campaign players have the same world loaded | 0005 |
+| 2. Possession / switch on death | Native: `ReplaceBotWithPlayer` (Captain mode uses it after death), `MissionPeer.ControlledAgent`, `Agent.IsPlayerControlled` | 0005, 0004 |
+| 3. Listen server from the SP client | Yes: `StartMultiplayerOnServer` → `MultiClientServer`; used by `LobbyGameStatePlayerBasedCustomServer`; admission via public `AddNewPlayerOnServer` | 0005 |
+| 4. Campaign scenes in MP | `battle_terrain_*` are in client SandBoxCore → present on every player's machine (listen server), absent on the dedicated server | 0005 |
+| 5. Result round-trip | Host = server; per-troop results via public `MapEventSide.OnTroopKilled/Wounded/Routed(UniqueTroopDescriptor)`, then normal `PlayerEncounter` result flow | 0003 |
+| Agent replication of SP spawns | `Mission.SpawnAgent` broadcasts `CreateAgent` whenever `GameNetwork.IsServerOrRecorder`; late joiners get `SendExistingObjectsToPeer` | 0004 |
+
+### Gates (must pass before Phase 6 commits to B; run as Phase 2b/4 spikes)
+- **S1 — MBGUID parity**: same save loaded on two instances → identical MBGUIDs for heroes, troops, items
+  (incl. crafted). Fail → GUID remap layer or registration of battle objects in fixed order; if impossible → A.
+- **S2 — listen server in campaign**: host in campaign starts `StartMultiplayerOnServer`, opens a minimal
+  networked battle mission; instance 2 connects via `AddNewPlayerOnServer` + `StartMultiplayerOnClient`
+  (no TaleWorlds lobby) and sees agents. Fail → A.
+- Also record: which SP mission behaviors misbehave with `GameNetwork.IsServer`.
+
+### Consequences
+- Battle traffic = engine UDP to the host's port → host must be reachable (port forward / VPN / tunnel,
+  ADR-0011/0012).
+- Allocation core unchanged; battle adapter targets `ReplaceBotWithPlayer` + troop supplier filtering.
+- Campaign sync (ADR-0010) must guarantee all players have the identical world when a battle starts.
 
 ## Option A — custom netcode over single-player missions
 Own transport (e.g. LiteNetLib, MIT), Harmony patches, own agent/state replication on top of SP
