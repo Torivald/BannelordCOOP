@@ -52,8 +52,11 @@ Details: `docs/research/0001-environment.md`, ADR-0009.
   v5.11.99.0 (3747620191). The game picked Harmony **v2.4.99.0** (3747619959) in the test run.
 - Tooling: .NET SDK 8.0.426 + **10.0.402**; Visual Studio Community 2026 (18.11.0); `gh` 2.102.0
   (logged in, not on the bash PATH); ilspycmd 9.1; Git 2.55.0; Python 3.12.10; Ollama 0.40.5 + qwen3.5:9b
-- Logs: game `C:\ProgramData\Mount and Blade II Bannerlord\logs` (previous run's logs are deleted
-  on relaunch); mod `Documents\Mount and Blade II Bannerlord\Logs\BannerCoopTW`
+- Logs: game `C:\ProgramData\Mount and Blade II Bannerlord\logs` (old logs pruned at startup,
+  rule unclear — copy before relaunch); mod `Documents\Mount and Blade II Bannerlord\Logs\BannerCoopTW`
+- Local model trial (qwen3.5:9b, `local_llm.py` on a 258 KB rgl_log): 10 calls, 9 min; found the
+  right issues and main-menu state, but counts were wrong (FMOD 46 vs 67 actual) and it quoted its
+  own partial summaries as log text → use only for first-pass triage, always grep-verify
 
 ## Blockers (user action)
 

@@ -6,7 +6,7 @@ Status: Accepted · 2026-10-18 (Phase 1)
 CLAUDE.md planned projects named `BannerlordCoop.*` and asked for a module ID distinct from "Coop".
 Assembly names equal to those of the BannerlordCoop mod could collide in one game process
 (both loaded by simple name). CI must build without game files. Logs must survive game relaunches
-(the game deletes the previous run's `rgl_log_*`, research 0001).
+(the game prunes old `rgl_log_*` files at startup, research 0001).
 
 ## Decision
 1. Module ID, DLL name and root namespace: **`BannerCoopTW`** (`Modules/BannerCoopTW`,

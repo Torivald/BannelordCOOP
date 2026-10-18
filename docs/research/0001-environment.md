@@ -96,9 +96,10 @@ right now anyway.
 - Main-menu reached marker: `GauntletInitialScreen::HandleInitialize`.
 - `Mono Loading Step::…` lines appear during startup but do **not** identify the runtime
   (see above).
-- **Previous `rgl_log_*` / `watchdog_log_*` files are deleted on the next game launch**
-  (observed twice: May logs gone after the 2-instance test; the test's logs gone after the
-  re-check launch). Copy logs out before relaunching when debugging. Unrelated old files stay: `launcher_log_*`, `CrashUploader.*.txt` (2024, May 2026),
+- **Old `rgl_log_*` / `watchdog_log_*` files are pruned when the game starts**, rule unclear:
+  the May logs and the 2-instance test's logs disappeared after the next launch, but
+  `rgl_log_13184` survived the following launch (1756) while both runs' watchdog logs were
+  removed (Phase 1 observation). Copy logs out before relaunching when debugging. Unrelated old files stay: `launcher_log_*`, `CrashUploader.*.txt` (2024, May 2026),
   `crashlist.txt`, a third-party mod debug log.
 
 ### Two game instances on one PC — **works**
