@@ -1,6 +1,6 @@
 # Current State — Bannerlord Co-op
 
-Last updated: 2026-10-18 (scope answers recorded)
+Last updated: 2026-10-18 (master plan + environment checklist)
 
 ## Phase
 
@@ -11,6 +11,7 @@ Last updated: 2026-10-18 (scope answers recorded)
 - Project concept and Battle Participation spec defined.
 - Initial review of instructions and environment: `docs/research/0000-initial-review.md`.
 - CLAUDE.md v2 (old one in `docs/archive/`).
+- Master plan `docs/plans/MASTER_PLAN.md`, checklist `docs/plans/ENVIRONMENT_CHECKLIST.md`.
 - ADR-0007 (product scope: shared campaign, 4 players, dedicated + Steam invite, PvP, sieges, immortal heroes).
 - ADR-0004 (reference-mod license), ADR-0005 (decompilation policy),
   ADR-0006 (battle architecture options, OPEN).
@@ -22,13 +23,17 @@ Last updated: 2026-10-18 (scope answers recorded)
 - TaleWorlds assemblies target .NET Standard 2.0
 - Modules present: Native, SandBoxCore, SandBox, StoryMode, CustomBattle, Multiplayer,
   BirthAndDeath, FastMode
-- Project folder is not a Git repository yet
+- Dedicated Server installed; Git, .NET Framework 4.7.2 dev pack, VS Code, Python present
+- .NET SDK: only 8.0.426 (ilspycmd needs .NET 10 SDK); no Visual Studio/Rider, Node.js, gh CLI
+- Game logs folder exists: C:\ProgramData\Mount and Blade II Bannerlord\logs
+- GitHub push from Claude works (repo Torivald/BannelordCOOP)
+- Local project folder is not a Git repository yet
 
 ## Blockers (user action)
 
 1. ~~Update client to 1.4.8~~ done. ~~Toolchain + dedicated server~~ installed (versions to record).
 2. ilspycmd install fails on current SDK (tool targets newer .NET) → install .NET 10 SDK or pin an older ilspycmd.
-3. Link GitHub account in claude.ai so Claude can push to Torivald/BannelordCOOP.
+~~3. GitHub access~~ done.
 4. Add `C:\Users\Torivald\.local\bin` to PATH and run local Claude Code from `E:\Claude Bannerlord`.
 ~~5. ADR-0007 open questions~~ answered: campaign pauses during battle, all players join; one battle at a time.
 
