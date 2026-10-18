@@ -121,6 +121,16 @@ End: summarise changes, unresolved assumptions, tests actually run; update CURRE
 - **Local Claude Code on Windows** (recommended for Phase 1+): needed for `dotnet build`,
   MSBuild, ilspycmd, launching the game, reading logs, Git.
 
+## Model routing (local Claude Code)
+- Project default model is `opusplan` (`.claude/settings.json`): plan mode runs on Opus, execution on Sonnet.
+  For any non-trivial task, start in plan mode (Shift+Tab), approve the plan, execution switches to Sonnet.
+- Delegate by subagent (`.claude/agents/`), each pinned to a model:
+  `bannerlord-researcher` (Sonnet) API lookups · `log-triage` (Haiku) logs/build output ·
+  `implementer` (Sonnet) specified coding · `architect-reviewer` (Opus) ADRs, hard debugging, milestone review.
+- At the start of a task, if the current main model is clearly mismatched (e.g. Opus outside plan mode
+  for routine edits, or Haiku/Sonnet for an architecture decision), say so in one line and suggest the
+  exact command (`/model sonnet`, `/model opusplan`, `/model opus`) before continuing.
+
 ## Token / context discipline (Claude Pro)
 
 - Limits are shared between claude.ai and Claude Code and reset in 5-hour windows; weekly caps
