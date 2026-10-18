@@ -1,0 +1,27 @@
+<Project>
+  <!-- Shared settings for all BannerCoopTW projects. No machine paths here (CLAUDE.md). -->
+  <PropertyGroup>
+    <LangVersion>10.0</LangVersion>
+    <Nullable>enable</Nullable>
+    <Version>0.1.0</Version>
+    <Authors>Torivald</Authors>
+    <Company>BannerCoopTW</Company>
+    <!-- Exact client build the mod is compiled against (docs/research/0001-environment.md). -->
+    <GameVersion>1.4.8</GameVersion>
+    <GameBuild>119303</GameBuild>
+    <RepoRoot>$(MSBuildThisFileDirectory)</RepoRoot>
+  </PropertyGroup>
+
+  <!-- Local deploy target: `mb2` junction at repo root -> game folder (tools/dev/setup-junction.ps1).
+       Missing on CI, so BuildResources skips copying to Modules. -->
+  <PropertyGroup Condition="'$(GameFolder)' == '' AND Exists('$(RepoRoot)mb2\bin')">
+    <GameFolder>$(RepoRoot)mb2</GameFolder>
+  </PropertyGroup>
+  <!-- Bannerlord.BuildResources warns when this env var is empty; feed it from GameFolder. -->
+  <PropertyGroup Condition="'$(BANNERLORD_GAME_DIR)' == '' AND '$(GameFolder)' != ''">
+    <BANNERLORD_GAME_DIR>$(GameFolder)</BANNERLORD_GAME_DIR>
+  </PropertyGroup>
+
+  <!-- Optional per-machine overrides (git-ignored). -->
+  <Import Project="$(RepoRoot)Directory.Build.local.props" Condition="Exists('$(RepoRoot)Directory.Build.local.props')" />
+</Project>

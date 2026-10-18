@@ -1,0 +1,58 @@
+name: build
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    # Compiles against BUTR Bannerlord.ReferenceAssemblies (NuGet) — no game files on CI.
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Restore
+        run: dotnet restore BannerCoopTW.sln
+
+      - name: Build
+        run: dotnet build BannerCoopTW.sln -c Release --no-restore
+
+      - name: Test
+        run: dotnet test BannerCoopTW.sln -c Release --no-build --logger "trx;LogFileName=results.trx" --results-directory TestResults
+
+      - name: Package module
+        # A fake game folder makes Bannerlord.BuildResources assemble Modules/BannerCoopTW
+        # (SubModule.xml with placeholders replaced + bin/Win64_Shipping_Client).
+        shell: pwsh
+        run: |
+          $game = Join-Path $env:RUNNER_TEMP 'game'
+          New-Item -ItemType Directory -Force (Join-Path $game 'Modules') | Out-Null
+          dotnet build src/BannerCoopTW.Module/BannerCoopTW.Module.csproj -c Release --no-restore "-p:GameFolder=$game"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $module = Join-Path $game 'Modules/BannerCoopTW'
+          foreach ($f in 'SubModule.xml', 'bin/Win64_Shipping_Client/BannerCoopTW.dll', 'bin/Win64_Shipping_Client/BannerCoopTW.Core.dll') {
+            if (-not (Test-Path (Join-Path $module $f))) { throw "missing $f" }
+          }
+          if (Select-String -Path (Join-Path $module 'SubModule.xml') -Pattern '\$\w+\$' -Quiet) { throw 'unreplaced placeholders in SubModule.xml' }
+          "MODULE_DIR=$module" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: BannerCoopTW-module
+          path: ${{ env.MODULE_DIR }}
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: test-results
+          path: TestResults
