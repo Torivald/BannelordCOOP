@@ -38,3 +38,16 @@ On claim:
 ## Important
 
 Do not assume the client view is authoritative.
+
+## Screen R — Resume campaign (after loading a co-op save)
+
+Spec: `docs/architecture/SESSION_RESUME.md`. Campaign is paused while this screen is open on the host.
+
+    Продолжение кампании
+    ─────────────────────────────
+    ● Ragnar   — выбран: Torivald
+    ○ Elvira   — свободен   (ваш прежний герой) [Подтвердить]
+    ○ Haldor   — свободен
+    ◐ Sigrun   — под управлением бота (игрок не подключён)
+    ─────────────────────────────
+    Подключены: 2/4      [Начать] (только хост; активна, когда все подключённые выбрали)

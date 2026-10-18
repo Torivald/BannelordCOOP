@@ -46,6 +46,15 @@
 - [ ] disconnect during control
 - [ ] battle completion
 
+## Session resume
+
+- [ ] loaded co-op save stays paused until host starts
+- [ ] returning player's previous hero is pre-selected (Steam ID)
+- [ ] two players claim the same hero → one rejected
+- [ ] absent player's hero runs on AI after start
+- [ ] late player reclaims hero without pausing campaign
+- [ ] Start disabled until all connected players have a hero
+
 ## Regression
 
 - [ ] vanilla single-player battle still works

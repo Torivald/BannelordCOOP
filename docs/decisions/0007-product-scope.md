@@ -11,6 +11,8 @@ Status: Accepted
 | PvP | Allowed: players may join the opposing side and control enemy lords. |
 | Sieges | In scope (not only field battles). |
 | Player characters | Immortal (never die; knock-out only). |
+| Resume from save (2026-10-18) | Host loads the co-op save → campaign **paused until every connected player has reclaimed their hero** in a selection window (SESSION_RESUME.md). |
+| Absent player (2026-10-18) | Their hero/party is **controlled by a bot (game AI)** until they reconnect and reclaim it (no new pause). |
 
 ## Consequences
 - Campaign synchronisation is unavoidable → custom campaign netcode with an authoritative host is
