@@ -12,7 +12,8 @@
 | Логи игры | ✅ папка есть | `C:\ProgramData\Mount and Blade II Bannerlord\logs` |
 | War Sails DLC | ✅ не установлен | хорошо — меньше несовместимостей |
 | Bannerlord.Harmony (Workshop) | ✅ v2.4.2.248 | + ButterLib v2.12.0, UIExtenderEx v3.0.3 |
-| Diplomacy (Workshop) | ⚠ v1.5.4 | **отключать в лаунчере на время разработки/тестов** — меняет кампанию |
+| Diplomacy (Workshop) | ✅ v1.5.4 | требуемая совместимость (ADR-0008); при тестах ядра синхронизации — отключать |
+| MCM — Mod Configuration Menu (Workshop) | ❌ | **нужен Diplomacy** (≥5.12.3) — подписаться в Workshop |
 
 ## Инструменты разработки
 
@@ -37,6 +38,7 @@
 | Локальная папка как Git-репо | ❌ | см. «Шаги» ниже |
 | Навыки bannerlord-research / coop-architecture / mvp-check | ✅ | сохранены |
 | Память проекта + документы проекта claude.ai | ✅ | |
+| Ollama + локальная модель | ❌ | установить Ollama, `ollama pull` модели; проверка: `python tools/local_llm.py --check` |
 | MCP-серверы | не нужны | 0 внешних MCP — осознанно (ADR-0001) |
 
 ## Для тестов с 4 игроками (понадобится с Phase 4–5)
