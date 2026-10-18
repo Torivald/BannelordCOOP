@@ -13,7 +13,7 @@
 | War Sails DLC | ✅ не установлен | хорошо — меньше несовместимостей |
 | Bannerlord.Harmony (Workshop) | ✅ v2.4.2.248 | + ButterLib v2.12.0, UIExtenderEx v3.0.3 |
 | Diplomacy (Workshop) | ✅ v1.5.4 | требуемая совместимость (ADR-0008); при тестах ядра синхронизации — отключать |
-| MCM — Mod Configuration Menu (Workshop) | ❌ | **нужен Diplomacy** (≥5.12.3) — подписаться в Workshop |
+| MCM — Mod Configuration Menu | ✅ v5.13.1 | с Nexus (мод 612) в `Modules/Bannerlord.MBOptionScreen`; перезаливы 3747… удалены |
 
 ## Инструменты разработки
 

@@ -23,8 +23,9 @@ except type names.
   `1.4.8.dll`, `1.5.1`…`1.5.4.dll` (+ `ColorMinePortable.dll`). A `1.4.8` build is present.
 - Declared dependencies: Bannerlord.Harmony ≥ v2.4.2, ButterLib ≥ v2.11.1, **MCM (Bannerlord.MBOptionScreen)
   ≥ v5.12.3**, UIExtenderEx ≥ v2.13.2; Native/SandBoxCore/Sandbox/StoryMode ≥ v1.4.0.
-  On the dev PC the only MCM is Workshop 3747620191 **v5.11.99.0** (< 5.12.3), and ButterLib/UIExtenderEx
-  exist in two versions each (CURRENT_STATE blocker) → whether Diplomacy loads on this PC is unverified.
+  **Loads on 1.4.8** (2026-10-18, after Workshop cleanup, MCM v5.13.1 from Nexus): ButterLib log
+  "Loading implementation Bannerlord.Diplomacy.1.4.8.dll for game v1.4.8" … "Loaded Diplomacy v1.5.4!";
+  game errors log empty. Campaign behaviour not yet exercised.
 - 485 types. Campaign behaviors (`Diplomacy.CampaignBehaviors.*`): `CivilWarBehavior`, `CooldownBehavior`,
   `DiplomaticAgreementBehavior`, `ExpansionismBehavior`, `FactionRecruitmentBehavior`,
   `FiefProvenanceBehavior`, `KeepFiefAfterSiegeBehavior`, `KingdomRulerRepairBehavior`,
@@ -59,7 +60,7 @@ except type names.
 - Exact method signatures of the action classes (next step: targeted `ilspycmd -t <type>` of each action,
   signatures only).
 - Whether Diplomacy behaviors use `MBRandom`/time in ways that break if clients' ticks are suppressed.
-- Whether it loads with MCM v5.11.99 / duplicated ButterLib on this PC.
+- ~~Whether it loads on this PC~~ — yes (main menu); campaign not yet tested.
 
 ## Implementation impact
 - `src/BannerCoopTW.Compat.Diplomacy` (soft dependency) = list of action interceptors + suppression of
@@ -70,5 +71,5 @@ except type names.
 CC BY-NC-SA 4.0: read for compatibility, **no code copied** into this MIT repo; integrate at runtime only.
 
 ## Follow-up tests
-1. Resolve Workshop duplicates, install MCM ≥ 5.12.3, confirm Diplomacy loads on 1.4.8.
+1. ~~Confirm Diplomacy loads on 1.4.8~~ done; next: start a campaign with it and check its behaviors run.
 2. Signatures of action classes (Phase 5g prep).
