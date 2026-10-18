@@ -1,0 +1,20 @@
+# Third-party reference code — never commit (ADR-0004)
+BannerlordCoop-development/
+
+# Decompiled game code — never commit (ADR-0005)
+_decompiled/
+
+# Build output
+bin/
+obj/
+*.user
+.vs/
+.idea/
+*.suo
+packages/
+
+# Local machine config
+mb2
+*.local.props
+*.local.json
+.env
