@@ -70,7 +70,23 @@ Running: unclaimed slots → Mode = Bot; late joiner → claim → Mode = Player
 - Owner of a Bot hero reconnects during a battle → joins as battle participant/spectator; hero handover
   after the battle (campaign paused anyway).
 - Host's save has no `CoopSessionData` (vanilla save) → offered as a new co-op campaign, not resume.
-- Open: new player creating a new hero in an existing save.
+- A 5th player when all 4 slots are taken → join rejected (`no_free_slot`).
+
+## Late join with a new hero (gated by spike S3, may be disabled in MVP)
+User decision 2026-10-18: `MaxPlayers = 4`. Free slots (no `PlayerHeroSlot` yet) are shown as
+«Свободное место — создать героя», both in the resume window and to players joining a running session.
+- Client runs the **vanilla character creation** locally (culture, face/body, name, background choices),
+  then sends `CreateHeroRequest { culture, bodyProperties, name, gender, creationChoices }`.
+- Host validates a free slot (reservation as for claims) and creates the world objects:
+  hero `HeroCreator.CreateSpecialHero(template, bornSettlement, clan, …)`, own new clan `Clan.CreateClan(id)`,
+  party `MobilePartyHelper.CreateNewClanMobileParty(hero, clan)` or `SpawnLordParty(hero, settlement)` in a town of
+  the chosen culture; applies vanilla start gold/troops/skills according to the creation choices; adds a
+  `PlayerHeroSlot { Mode = Player }`; replicates (delta or resync, ADR-0010). Campaign is not paused.
+  APIs above exist in 1.4.8 (verified); applying creation choices to a non-main hero is not.
+- **Spike S3 (Phase 5a)**: run `CharacterCreationState` (built for the new-game main hero) on a client in a running
+  campaign, capture its result without creating a local main hero, and rebuild it on the host.
+- **Fallback if S3 fails**: feature disabled — only existing slots can be reclaimed; new players only at the start
+  of a new co-op campaign (user accepted this, 2026-10-18).
 
 ## Tests
 See `docs/testing/TEST_MATRIX.md` → "Session resume".

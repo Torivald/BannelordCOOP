@@ -111,6 +111,7 @@ Details: `docs/research/0001-environment.md`, ADR-0009.
 - **S1** MBGUID parity after loading the same save on two instances (ADR-0006 gate)
 - **S2** listen server started inside a campaign + second instance joins without the TaleWorlds lobby (ADR-0006 gate)
 - Client main-hero switch after loading host save (ADR-0010)
+- **S3** vanilla character creation mid-campaign for a late joiner (SESSION_RESUME; feature may be disabled if it fails)
 - Steam lobby/P2P from the mod (needs second Steam account/PC)
 
 ## Next actions
