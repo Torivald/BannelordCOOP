@@ -18,3 +18,6 @@ mb2
 *.local.props
 *.local.json
 .env
+
+# Local tool binaries (ILSpy GUI etc.)
+ilspy/
