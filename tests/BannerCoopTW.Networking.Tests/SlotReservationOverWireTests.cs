@@ -13,7 +13,7 @@ namespace BannerCoopTW.Networking.Tests
     {
         private const ulong A = 1, B = 2, C = 3, D = 4;
 
-        private static Harness Start(int maxPlayers = 5) => new Harness(new ManualClock(), maxPlayers);
+        private static Harness Start(int maxParticipants = 5) => new Harness(new ManualClock(), maxParticipants);
 
         private static void ChooseSide(Harness h, FakeClient c, BattleSide side)
         {
@@ -178,7 +178,7 @@ namespace BannerCoopTW.Networking.Tests
         [Fact]
         public void Player_cap_rejects_the_extra_client_with_session_full()
         {
-            using var h = Start(maxPlayers: 4); // initiator + 3 remote
+            using var h = Start(maxParticipants: 4); // initiator + 3 remote (ADR-0007 MVP)
             var clients = new[] { A, B, C, D }.Select(h.Join).ToArray();
             Assert.NotNull(clients[0].Last<BattleInvite>());
             Assert.NotNull(clients[2].Last<BattleInvite>());
@@ -226,6 +226,77 @@ namespace BannerCoopTW.Networking.Tests
             var second = h.Join(A);
             Assert.NotNull(first.Last<BattleInvite>());
             Assert.Equal(RejectReason.SessionFull, second.Last<HelloReject>()!.Reason);
+        }
+
+        [Fact]
+        public void Request_for_another_battle_epoch_is_refused()
+        {
+            using var h = Start();
+            var x = h.Join(A);
+            ChooseSide(h, x, BattleSide.Attacker);
+            Assert.Equal(7u, x.Epoch);
+            x.Send(new ReserveRequest { Epoch = 6, RequestId = 1, SlotId = "a-lord2" });
+            h.Pump(() => x.Last<ReserveResponse>() != null, "stale reply");
+            Assert.Equal(SessionError.StaleBattle, x.Last<ReserveResponse>()!.Error);
+            Assert.Equal(PlayerPhase.SideChosen, h.Session.GetPhase(new PlayerId(A)));
+        }
+
+        [Fact]
+        public void Client_confirm_is_ignored_unless_enabled_and_the_engine_confirms_instead()
+        {
+            using var h = Start();
+            h.Host.AllowClientConfirm = false;
+            var x = h.Join(A);
+            ChooseSide(h, x, BattleSide.Attacker);
+            x.Send(new ReserveRequest { RequestId = 1, SlotId = "a-lord2" });
+            h.Pump(() => x.Last<ReserveResponse>() != null, "reserved");
+            x.Send(new ConfirmRequest { ReservationId = x.Last<ReserveResponse>()!.ReservationId });
+            h.Pump(() => x.Last<ConfirmResponse>() != null, "refused");
+            Assert.NotEqual(SessionError.None, x.Last<ConfirmResponse>()!.Error);
+            Assert.Equal(PlayerPhase.Reserved, h.Session.GetPhase(new PlayerId(A)));
+
+            Assert.Equal(SessionError.None, h.Host.ConfirmFromEngine(new PlayerId(A)));
+            h.Pump(() => x.All<ConfirmResponse>().Any(r => r.Error == SessionError.None), "engine confirm delivered");
+            Assert.Equal(PlayerPhase.Controlling, h.Session.GetPhase(new PlayerId(A)));
+        }
+
+        [Fact]
+        public void Four_clients_run_a_full_mixed_scenario_and_end_in_a_consistent_state()
+        {
+            using var h = Start();
+            var c = new[] { A, B, C, D }.Select(h.Join).ToArray();
+            ChooseSide(h, c[0], BattleSide.Attacker);
+            ChooseSide(h, c[1], BattleSide.Attacker);
+            ChooseSide(h, c[2], BattleSide.Defender);
+            ChooseSide(h, c[3], BattleSide.Attacker);
+
+            // A and B fight for the last archer, C takes the enemy lord, D takes the officer - all requests in flight at once.
+            c[0].Send(new ReserveRequest { RequestId = 1, SlotId = "a-arch" });
+            c[1].Send(new ReserveRequest { RequestId = 2, SlotId = "a-arch" });
+            c[2].Send(new ReserveRequest { RequestId = 3, SlotId = "d-lord" });
+            c[3].Send(new ReserveRequest { RequestId = 4, SlotId = "a-off" });
+            h.Pump(() => c.All(x => x.Last<ReserveResponse>() != null), "all replies");
+
+            var ok = c.Select(x => x.Last<ReserveResponse>()!).Where(r => r.Error == SessionError.None).ToList();
+            Assert.Equal(3, ok.Count);
+            Assert.Equal(1, new[] { c[0], c[1] }.Count(x => x.Last<ReserveResponse>()!.Error == SessionError.None));
+
+            // winners confirm; then the archer drops out while controlling
+            foreach (var x in c.Where(x => x.Last<ReserveResponse>()!.Error == SessionError.None))
+                x.Send(new ConfirmRequest { ReservationId = x.Last<ReserveResponse>()!.ReservationId });
+            h.Pump(() => c.Where(x => x.Last<ReserveResponse>()!.Error == SessionError.None).All(x => x.Last<ConfirmResponse>() != null), "confirms");
+            var archer = c.Single(x => x.Last<ReserveResponse>()!.Error == SessionError.None && h.Session.GetHeldSlot(new PlayerId(x.PlayerId)) == "a-arch");
+            archer.Kill();
+            h.Pump(() => h.Session.GetPhase(new PlayerId(archer.PlayerId)) == PlayerPhase.Left, "archer gone", 20_000);
+
+            // the loser can now take the freed archer seat
+            var loser = c.Single(x => x.Last<ReserveResponse>()!.Error == SessionError.SlotUnavailable);
+            loser.Send(new ReserveRequest { RequestId = 9, SlotId = "a-arch" });
+            h.Pump(() => loser.All<ReserveResponse>().Any(r => r.RequestId == 9), "retry reply");
+            Assert.Equal(SessionError.None, loser.All<ReserveResponse>().Single(r => r.RequestId == 9).Error);
+
+            h.Host.EndBattle();
+            h.Pump(() => c.Where(x => x != archer).All(x => x.Last<BattleEnded>() != null), "battle ended for everyone still connected");
         }
     }
 }

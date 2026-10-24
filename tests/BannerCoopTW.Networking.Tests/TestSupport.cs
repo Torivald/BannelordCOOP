@@ -39,12 +39,18 @@ namespace BannerCoopTW.Networking.Tests
             _transport.DataReceived += (c, data, mode) =>
             {
                 var d = MessageCodec.Decode(data);
-                if (d.Ok)
-                    _received.Add(d.Message!);
+                if (!d.Ok)
+                    return;
+                _received.Add(d.Message!);
+                if (d.Message is BattleInvite invite)
+                    Epoch = invite.Epoch;
             };
         }
 
         public ulong PlayerId { get; }
+
+        /// <summary>Battle epoch learnt from the invite; stamped on every request unless overridden.</summary>
+        public uint Epoch { get; set; }
 
         public DisconnectReason? DisconnectReason { get; private set; }
 
@@ -59,7 +65,20 @@ namespace BannerCoopTW.Networking.Tests
 
         public void Poll() => _transport.Poll();
 
-        public void Send(Message m, ushort? version = null) =>
+        public void Send(Message m, ushort? version = null)
+        {
+            switch (m)
+            {
+                case ChooseSide x when x.Epoch == 0: x.Epoch = Epoch; break;
+                case ReserveRequest x when x.Epoch == 0: x.Epoch = Epoch; break;
+                case ConfirmRequest x when x.Epoch == 0: x.Epoch = Epoch; break;
+                case ReleaseRequest x when x.Epoch == 0: x.Epoch = Epoch; break;
+            }
+
+            SendRaw(m, version);
+        }
+
+        private void SendRaw(Message m, ushort? version) =>
             _transport.Send(_connection, version.HasValue ? MessageCodec.Encode(m, version.Value) : MessageCodec.Encode(m), DeliveryMode.ReliableOrdered);
 
         public void SendHello(string build = Build, ushort? version = null) =>
@@ -78,7 +97,7 @@ namespace BannerCoopTW.Networking.Tests
     /// <summary>Single-threaded pump: the "game loop" of the test. Polls the host and every client until a condition holds.</summary>
     internal sealed class Harness : IDisposable
     {
-        public Harness(ManualClock clock, int maxPlayers = BattleServerHost.DefaultMaxPlayers)
+        public Harness(ManualClock clock, int maxParticipants = 5)
         {
             Clock = clock;
             Transport = new LiteNetLibServerTransport();
@@ -92,8 +111,8 @@ namespace BannerCoopTW.Networking.Tests
                 .AddLord(BattleSide.Defender, "d-lord", "Lord D")
                 .AddTroopClass(BattleSide.Defender, "d-inf", "Infantry", 2)
                 .Build();
-            Session = new BattleSession("battle-1", Catalog, clock, null, new PlayerId(1000), BattleSide.Attacker, "a-lord1");
-            Host = new BattleServerHost(Transport, Session, clock, FakeClient.Build, maxPlayers);
+            Session = new BattleSession("battle-1", Catalog, clock, new SessionOptions { MaxParticipants = maxParticipants, Epoch = 7 }, new PlayerId(1000), BattleSide.Attacker, "a-lord1");
+            Host = new BattleServerHost(Transport, Session, clock, FakeClient.Build) { AllowClientConfirm = true };
         }
 
         public ManualClock Clock { get; }

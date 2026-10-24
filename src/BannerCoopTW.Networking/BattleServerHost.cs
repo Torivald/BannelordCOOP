@@ -13,37 +13,49 @@ namespace BannerCoopTW.Networking
     /// </summary>
     public sealed class BattleServerHost : IDisposable
     {
-        /// <summary>ADR-0007: MVP player count is 4 (including the host).</summary>
-        public const int DefaultMaxPlayers = 4;
-
         private readonly IServerTransport _transport;
         private readonly BattleSession _session;
         private readonly string _gameBuild;
-        private readonly int _maxPlayers;
         private readonly IClock _clock;
         private readonly Dictionary<ConnectionId, PlayerId> _playerOf = new Dictionary<ConnectionId, PlayerId>();
         private readonly Dictionary<PlayerId, ConnectionId> _connectionOf = new Dictionary<PlayerId, ConnectionId>();
-        private readonly HashSet<ConnectionId> _pending = new HashSet<ConnectionId>();
         private readonly List<KeyValuePair<ConnectionId, long>> _closing = new List<KeyValuePair<ConnectionId, long>>();
         private readonly System.Diagnostics.Stopwatch _wall = System.Diagnostics.Stopwatch.StartNew();
 
         /// <summary>Grace before a refused peer is cut, so the reliable HelloReject (the reason) still reaches it.</summary>
         private const int RejectLingerMs = 200;
 
-        public BattleServerHost(IServerTransport transport, BattleSession session, IClock clock, string gameBuild, int maxPlayers = DefaultMaxPlayers)
+        public BattleServerHost(IServerTransport transport, BattleSession session, IClock clock, string gameBuild)
         {
             _transport = transport;
             _session = session;
             _clock = clock;
             _gameBuild = gameBuild;
-            _maxPlayers = maxPlayers;
             // The initiator is the host's own local player and is not connected through the transport.
-            _transport.Connected += c => _pending.Add(c);
             _transport.Disconnected += OnDisconnected;
             _transport.DataReceived += OnData;
         }
 
         public BattleSession Session => _session;
+
+        /// <summary>
+        /// Whether a client's ConfirmRequest may bind the reservation. In the game the engine side confirms (<see cref="ConfirmFromEngine"/>) once the
+        /// agent is attached; clients must not self-assign, so this is off by default (tests switch it on as a stand-in for the engine).
+        /// </summary>
+        public bool AllowClientConfirm { get; set; }
+
+        /// <summary>Engine callback: the agent of the player's reservation is attached; Reserved → Controlling.</summary>
+        public SessionError ConfirmFromEngine(PlayerId player)
+        {
+            var held = _session.GetReservationId(player);
+            if (held == 0)
+                return SessionError.ReservationNotFound;
+            var result = _session.Confirm(player, held);
+            if (_connectionOf.TryGetValue(player, out var c))
+                Send(c, new ConfirmResponse { ReservationId = held, Error = result });
+            Flush();
+            return result;
+        }
 
         public int ConnectedPlayers => _playerOf.Count;
 
@@ -82,7 +94,6 @@ namespace BannerCoopTW.Networking
 
         private void OnDisconnected(ConnectionId c, DisconnectReason reason)
         {
-            _pending.Remove(c);
             if (_playerOf.TryGetValue(c, out var player))
             {
                 _playerOf.Remove(c);
@@ -116,6 +127,13 @@ namespace BannerCoopTW.Networking
                 return;
             }
 
+            var epoch = EpochOf(message);
+            if (epoch.HasValue && epoch.Value != _session.Epoch)
+            {
+                RefuseStale(c, message);
+                return;
+            }
+
             switch (message)
             {
                 case ChooseSide choose:
@@ -131,12 +149,16 @@ namespace BannerCoopTW.Networking
                     {
                         RequestId = reserve.RequestId,
                         Error = r.Error,
-                        ReservationId = r.Reservation?.Id ?? 0,
-                        ExpiresInMs = r.Reservation == null ? 0 : (int)Math.Max(0, r.Reservation.ExpiresAtMs - _clock.NowMs),
+                        ReservationId = r.ReservationId,
+                        ExpiresInMs = r.Ok ? (int)Math.Max(0, r.ExpiresAtMs - _clock.NowMs) : 0,
                     });
                     break;
                 case ConfirmRequest confirm:
-                    Send(c, new ConfirmResponse { ReservationId = confirm.ReservationId, Error = _session.Confirm(player, confirm.ReservationId) });
+                    Send(c, new ConfirmResponse
+                    {
+                        ReservationId = confirm.ReservationId,
+                        Error = AllowClientConfirm ? _session.Confirm(player, confirm.ReservationId) : SessionError.WrongPhase,
+                    });
                     break;
                 case ReleaseRequest _:
                     _session.Release(player);
@@ -169,23 +191,50 @@ namespace BannerCoopTW.Networking
             }
 
             var player = new PlayerId(hello.PlayerId);
-            if (_connectionOf.ContainsKey(player) || _playerOf.Count + 1 >= _maxPlayers) // +1: the initiator holds one of the places
+            if (_connectionOf.ContainsKey(player))
             {
                 Reject(c, RejectReason.SessionFull, "no free player place");
                 return;
             }
 
-            if (_session.Invite(player) != SessionError.None)
+            var invite = _session.Invite(player);
+            if (invite != SessionError.None)
             {
-                Reject(c, RejectReason.SessionFull, "battle not accepting players");
+                Reject(c, RejectReason.SessionFull, invite == SessionError.SessionFull ? "no free player place" : "battle not accepting players");
                 return;
             }
 
-            _pending.Remove(c);
             _playerOf[c] = player;
             _connectionOf[player] = c;
             Send(c, new HelloAck { SessionId = _session.BattleId });
-            Send(c, new BattleInvite { BattleId = _session.BattleId, InitiatorSide = _session.InitiatorSide, AllowPvp = true });
+            Send(c, new BattleInvite { BattleId = _session.BattleId, Epoch = _session.Epoch, InitiatorSide = _session.InitiatorSide, AllowPvp = true });
+        }
+
+        private static uint? EpochOf(Message m)
+        {
+            switch (m)
+            {
+                case ChooseSide x: return x.Epoch;
+                case ReserveRequest x: return x.Epoch;
+                case ConfirmRequest x: return x.Epoch;
+                case ReleaseRequest x: return x.Epoch;
+                default: return null;
+            }
+        }
+
+        private void RefuseStale(ConnectionId c, Message m)
+        {
+            switch (m)
+            {
+                case ReserveRequest r:
+                    Send(c, new ReserveResponse { RequestId = r.RequestId, Error = SessionError.StaleBattle });
+                    break;
+                case ConfirmRequest k:
+                    Send(c, new ConfirmResponse { ReservationId = k.ReservationId, Error = SessionError.StaleBattle });
+                    break;
+                default:
+                    break; // side/release for another battle: ignored, the next SlotList carries the right epoch implicitly
+            }
         }
 
         private void Reject(ConnectionId c, RejectReason reason, string detail)
