@@ -124,3 +124,9 @@ Details: `docs/research/0001-environment.md`, ADR-0009.
 ## Do not do yet
 
 Campaign sync, save sync, matchmaking, NAT traversal, production servers, optimisation, UI polish.
+
+## 2026-10-25 — Phase 3 core (branch `phase3/core-allocation`)
+- `BannerCoopTW.Core.Battle`: SlotCatalog, ReservationService, BattleSession, seat/player state machines; `BannerCoopTW.Core.Protocol`: versioned binary wire protocol.
+  Details and known limitations: `docs/architecture/BATTLE_PARTICIPATION.md` ("Implementation status").
+- Tests actually run: 107 xUnit tests (net8.0), including 200-round concurrent claims, fuzz/mutation of frames, expiry with a moving clock. Not run on net472 / inside the game.
+- Reviewed by the architect-reviewer agent; critical findings (pinned initiator hero, AI losses, agent death before confirm, ControlReleased, lost expiry events, catalog thread-safety, epoch, cap, strict decoding) fixed in the same PR.
