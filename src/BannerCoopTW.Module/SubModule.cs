@@ -3,6 +3,8 @@ using System.IO;
 using BannerCoopTW.Core;
 using BannerCoopTW.Core.Config;
 using BannerCoopTW.Core.Logging;
+using BannerCoopTW.Spikes;
+using TaleWorlds.Core;
 using TaleWorlds.Library;
 using TaleWorlds.MountAndBlade;
 
@@ -14,8 +16,12 @@ namespace BannerCoopTW
         private static FileLog? _log;
         private static ModConfig _config = new ModConfig();
         private bool _announced;
+        private float _menuTime = -1f;
+        private bool _autoLoaded;
 
         public static ILog? Log => _log;
+
+        public static bool SpikesEnabled => _config.SpikesEnabled;
 
         protected override void OnSubModuleLoad()
         {
@@ -46,6 +52,7 @@ namespace BannerCoopTW
             if (_announced)
                 return;
             _announced = true;
+            _menuTime = 0f;
             try
             {
                 _log?.Info("main menu reached (OnBeforeInitialModuleScreenSetAsRoot)");
@@ -55,6 +62,35 @@ namespace BannerCoopTW
             catch (Exception e)
             {
                 _log?.Error("OnBeforeInitialModuleScreenSetAsRoot failed", e);
+            }
+        }
+
+        protected override void OnApplicationTick(float dt)
+        {
+            base.OnApplicationTick(dt);
+            if (_autoLoaded || _menuTime < 0f || !_config.SpikesEnabled || string.IsNullOrEmpty(_config.SpikeAutoLoadSave))
+                return;
+            _menuTime += dt;
+            if (_menuTime < 8f)
+                return;
+            _autoLoaded = true;
+            _log?.Info(SpikeS1.LoadSave(_config.SpikeAutoLoadSave));
+        }
+
+        public override void OnGameInitializationFinished(Game game)
+        {
+            base.OnGameInitializationFinished(game);
+            if (!_config.SpikesEnabled)
+                return;
+            try
+            {
+                LoadTimer.Finish();
+                foreach (var cmd in _config.SpikeAutoRun.Split(new[] { ',' }, StringSplitOptions.RemoveEmptyEntries))
+                    _log?.Info("auto-run " + cmd.Trim() + ": " + SpikeCommands.Run(cmd));
+            }
+            catch (Exception e)
+            {
+                _log?.Error("spike auto-run failed", e);
             }
         }
 
