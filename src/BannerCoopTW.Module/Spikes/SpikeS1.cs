@@ -203,7 +203,11 @@ namespace BannerCoopTW.Spikes
                 var data = (byte[]?)field?.GetValue(driver);
                 if (data == null)
                     continue;
-                size = data.Length;
+                // InMemDriver keeps GetBuffer() (capacity, zero padded); trim to the real payload.
+                var len = data.Length;
+                while (len > 0 && data[len - 1] == 0)
+                    len--;
+                size = len;
                 transfer.Add(LoopbackTransfer(data));
             }
 
