@@ -185,27 +185,54 @@ namespace BannerCoopTW.Spikes
         /// loopback TCP socket (transfer lower bound; not a real network). Load time is measured separately by
         /// <see cref="LoadTimer"/> (cold load of a save by name).
         /// </summary>
-        public static string SaveTiming()
+        public static string SaveTiming(int runs = 5)
         {
             if (Game.Current == null)
                 return "save_timing: no running game";
 
-            var driver = new InMemDriver();
-            var meta = new MetaData();
-            var done = false;
-            var sw = Stopwatch.StartNew();
-            Game.Current.Save(meta, "coop-spike", driver, _ => done = true);
-            var captureMs = sw.Elapsed.TotalMilliseconds;
+            var capture = new List<double>();
+            var transfer = new List<double>();
+            var size = -1;
+            var field = typeof(InMemDriver).GetField("_data", BindingFlags.NonPublic | BindingFlags.Instance);
+            for (var i = 0; i < runs; i++)
+            {
+                var driver = new InMemDriver();
+                var sw = Stopwatch.StartNew();
+                Game.Current.Save(new MetaData(), "coop-spike", driver, _ => { });
+                capture.Add(sw.Elapsed.TotalMilliseconds);
+                var data = (byte[]?)field?.GetValue(driver);
+                if (data == null)
+                    continue;
+                size = data.Length;
+                transfer.Add(LoopbackTransfer(data));
+            }
 
-            var data = (byte[]?)typeof(InMemDriver).GetField("_data", BindingFlags.NonPublic | BindingFlags.Instance)?.GetValue(driver);
-            var size = data?.Length ?? -1;
-            var transferMs = data == null ? -1 : LoopbackTransfer(data);
-
-            var text = $"save_timing pid={Pid} capture={captureMs:F0} ms (callbackDone={done}) bytes={size} loopbackTransfer={transferMs:F0} ms";
+            var text = $"save_timing pid={Pid} runs={runs} bytes={size} capture_ms median={Median(capture):F0} min={Min(capture):F0} max={Max(capture):F0} " +
+                       $"loopback_ms median={Median(transfer):F0} min={Min(transfer):F0} max={Max(transfer):F0}";
             Log?.Info(text);
             File.AppendAllText(Path.Combine(OutDir, $"save-timing-{Pid}.txt"), text + Environment.NewLine);
+            File.AppendAllText(Path.Combine(OutDir, $"save-timing-{Pid}.tsv"),
+                "run\tcapture_ms\tloopback_ms\n" + string.Join("\n", CombineRows(capture, transfer)) + "\n");
             return text;
         }
+
+        private static IEnumerable<string> CombineRows(List<double> a, List<double> b)
+        {
+            for (var i = 0; i < a.Count; i++)
+                yield return $"{i}	{a[i]:F1}	{(i < b.Count ? b[i].ToString("F1") : "")}";
+        }
+
+        private static double Median(List<double> v)
+        {
+            if (v.Count == 0) return -1;
+            var s = new List<double>(v);
+            s.Sort();
+            return s.Count % 2 == 1 ? s[s.Count / 2] : (s[s.Count / 2 - 1] + s[s.Count / 2]) / 2;
+        }
+
+        private static double Min(List<double> v) { if (v.Count == 0) return -1; var m = v[0]; foreach (var x in v) if (x < m) m = x; return m; }
+
+        private static double Max(List<double> v) { if (v.Count == 0) return -1; var m = v[0]; foreach (var x in v) if (x > m) m = x; return m; }
 
         private static double LoopbackTransfer(byte[] data)
         {
@@ -292,7 +319,8 @@ namespace BannerCoopTW.Spikes
         public static string WorldHash(List<string> args) => Guard(SpikeS1.WorldHash);
 
         [CommandLineFunctionality.CommandLineArgumentFunction("save_timing", "coop")]
-        public static string SaveTiming(List<string> args) => Guard(SpikeS1.SaveTiming);
+        public static string SaveTiming(List<string> args) =>
+            Guard(() => SpikeS1.SaveTiming(args.Count > 0 && int.TryParse(args[0], out var n) && n > 0 ? n : 5));
 
         [CommandLineFunctionality.CommandLineArgumentFunction("load_save", "coop")]
         public static string LoadSave(List<string> args) =>
@@ -304,7 +332,7 @@ namespace BannerCoopTW.Spikes
             {
                 case "dump_guids": return Guard(SpikeS1.DumpGuids);
                 case "world_hash": return Guard(SpikeS1.WorldHash);
-                case "save_timing": return Guard(SpikeS1.SaveTiming);
+                case "save_timing": return Guard(() => SpikeS1.SaveTiming());
                 default: return "unknown spike command: " + name;
             }
         }
