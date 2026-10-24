@@ -139,3 +139,25 @@ Clients must not be trusted to claim an entity merely because their local UI sho
 - player disconnects while controlling
 - reinforcements create new slots
 - battle ends while allocation UI is open
+
+## Implementation status (Phase 3, `BannerCoopTW.Core.Battle` / `.Protocol`)
+
+Implemented and unit-tested without the game: `SlotCatalog` (lords → officers → troop classes → siege engines per side, copy-on-write),
+`ReservationService` (atomic seats, lazy expiry reported once, pinned initiator hero, AI-loss and agent-death handling),
+`BattleSession` (player/seat state machines, PvP switch, 4-participant cap, battle epoch, events with revision, End while the UI is open),
+and a versioned binary protocol (`MessageCodec`, frame = magic, version, type, length).
+
+Decisions taken while implementing (review of 2026-10-25):
+- The initiator can neither release nor spectate away their own hero; if they disconnect the seat is written off, never offered to others.
+- A seat lost to death/knock-out is gone for the battle; the player is reseated if a slot is free on their side, otherwise spectates.
+- An agent that dies before the reservation is confirmed cancels the reservation (same path as death).
+- `ControlReleased` is emitted whenever a player stops controlling an agent (release, spectate, disconnect) so the engine can return it to AI.
+- Requests carry the battle epoch; a request for another battle is refused.
+
+Known limitations (open, not hidden):
+- `Hello.PlayerId` is client-supplied in the protocol: the server must take the identity from the authenticated connection (Steam), not trust the payload.
+- `ConfirmRequest` from a client is only an acknowledgement; binding the agent (Reserved → Controlling) is the engine side's job.
+- `Hello`/`HelloReject` are rejected like every message when the protocol version differs, so an older peer cannot read the reason; a frozen handshake layout is still to be designed.
+- Trailing bytes make a frame malformed (no forward-compatible extension without a version bump).
+- No atomic snapshot (revision + both sides + players) and no delta base-revision; no rate limiting; host loss is undefined (session lives in memory only).
+- Siege: engines are plain classes; defender roles and "engine destroyed" are not modelled.

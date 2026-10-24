@@ -355,13 +355,13 @@ namespace BannerCoopTW.Core.Tests
         }
 
         [Fact]
-        public void Report_down_for_player_who_is_not_controlling_is_ignored()
+        public void Report_down_for_a_player_without_a_seat_is_ignored()
         {
             var (s, _) = Open();
             Join(s, P2, BattleSide.Attacker);
-            s.Reserve(P2, "a-off");
-            Assert.Equal(DownOutcome.NotControlling, s.ReportDown(P2));
-            Assert.Equal(PlayerPhase.Reserved, s.GetPhase(P2));
+            Assert.Equal(DownOutcome.NotControlling, s.ReportDown(P2)); // chose a side but holds nothing
+            Assert.Equal(DownOutcome.NotControlling, s.ReportDown(new PlayerId(99)));
+            Assert.Equal(PlayerPhase.SideChosen, s.GetPhase(P2));
         }
 
         [Fact]
@@ -402,10 +402,17 @@ namespace BannerCoopTW.Core.Tests
         }
 
         [Fact]
-        public void Reinforcement_of_unknown_slot_throws()
+        public void Reinforcement_of_unknown_slot_is_an_error_code_not_an_exception()
         {
             var (s, _) = Open();
-            Assert.Throws<System.Collections.Generic.KeyNotFoundException>(() => s.AddReinforcements("zzz", 1));
+            Assert.Equal(SessionError.UnknownSlot, s.AddReinforcements("zzz", 1));
+        }
+
+        [Fact]
+        public void Seat_count_beyond_the_wire_limit_is_refused()
+        {
+            var (s, _) = Open();
+            Assert.Throws<System.ArgumentOutOfRangeException>(() => s.AddReinforcements("a-inf", 70_000));
         }
 
         // ---------------------------------------------------------------- battle end, closing
@@ -471,7 +478,7 @@ namespace BannerCoopTW.Core.Tests
         [InlineData(SeatState.Free, SeatState.Controlled, false)]
         [InlineData(SeatState.Reserved, SeatState.Controlled, true)]
         [InlineData(SeatState.Reserved, SeatState.Free, true)]
-        [InlineData(SeatState.Reserved, SeatState.Down, false)]
+        [InlineData(SeatState.Reserved, SeatState.Down, true)]
         [InlineData(SeatState.Controlled, SeatState.Down, true)]
         [InlineData(SeatState.Controlled, SeatState.Free, true)]
         [InlineData(SeatState.Down, SeatState.Free, false)]
@@ -519,6 +526,227 @@ namespace BannerCoopTW.Core.Tests
             s.Confirm(P4, s.Reserve(P4, "a-inf").Reservation!.Id);
             Assert.All(new[] { Host, P2, P3, P4 }, p => Assert.Equal(PlayerPhase.Controlling, s.GetPhase(p)));
             Assert.Equal(new[] { "a-lord1", "a-lord2", "d-lord", "a-inf" }.OrderBy(x => x), new[] { Host, P2, P3, P4 }.Select(p => s.GetHeldSlot(p)!).OrderBy(x => x));
+        }
+
+        // ---------------------------------------------------------------- review findings (Phase 3 review)
+
+        [Fact]
+        public void Initiator_cannot_release_or_spectate_their_own_hero()
+        {
+            var (s, _) = Open();
+            Join(s, P2, BattleSide.Attacker);
+            Assert.Equal(SessionError.WrongPhase, s.Release(Host));
+            Assert.Equal(SessionError.WrongPhase, s.Spectate(Host));
+            Assert.Equal(PlayerPhase.Controlling, s.GetPhase(Host));
+            Assert.Equal(SessionError.SlotUnavailable, s.Reserve(P2, "a-lord1").Error);
+        }
+
+        [Fact]
+        public void Initiator_disconnect_never_hands_their_hero_to_someone_else_and_signals_ai_handover()
+        {
+            var (s, _) = Open();
+            Join(s, P2, BattleSide.Attacker);
+            s.DrainEvents();
+            s.Disconnect(Host);
+            Assert.Contains(s.DrainEvents(), e => e.Kind == SessionEventKind.ControlReleased && e.Player == Host && e.SlotId == "a-lord1");
+            Assert.Equal(SessionError.SlotUnavailable, s.Reserve(P2, "a-lord1").Error);
+            Assert.DoesNotContain(s.GetSlots(P2), v => v.Id == "a-lord1");
+        }
+
+        [Fact]
+        public void Release_and_spectate_of_a_controlling_player_signal_control_released()
+        {
+            var (s, _) = Open();
+            Join(s, P2, BattleSide.Attacker);
+            Join(s, P3, BattleSide.Attacker);
+            s.Confirm(P2, s.Reserve(P2, "a-lord2").Reservation!.Id);
+            s.Confirm(P3, s.Reserve(P3, "a-off").Reservation!.Id);
+            s.DrainEvents();
+            s.Release(P2);
+            s.Spectate(P3);
+            var ev = s.DrainEvents().Where(e => e.Kind == SessionEventKind.ControlReleased).ToList();
+            Assert.Contains(ev, e => e.Player == P2 && e.SlotId == "a-lord2");
+            Assert.Contains(ev, e => e.Player == P3 && e.SlotId == "a-off");
+        }
+
+        [Fact]
+        public void Cancelling_an_unconfirmed_reservation_is_not_a_control_release()
+        {
+            var (s, _) = Open();
+            Join(s, P2, BattleSide.Attacker);
+            s.Reserve(P2, "a-lord2");
+            s.DrainEvents();
+            s.Release(P2);
+            Assert.DoesNotContain(s.DrainEvents(), e => e.Kind == SessionEventKind.ControlReleased);
+        }
+
+        [Fact]
+        public void Ai_losses_shrink_a_class_until_it_disappears()
+        {
+            var (s, _) = Open();
+            Join(s, P2, BattleSide.Attacker);
+            Assert.True(s.ReportAiLoss("a-arch"));          // the only archer died
+            Assert.DoesNotContain(s.GetSlots(P2), v => v.Id == "a-arch");
+            Assert.Equal(SessionError.SlotUnavailable, s.Reserve(P2, "a-arch").Error);
+            Assert.False(s.ReportAiLoss("a-arch"));         // nothing left to lose
+            Assert.False(s.ReportAiLoss("nope"));
+        }
+
+        [Fact]
+        public void Ai_loss_revokes_the_last_unconfirmed_reservation_and_reseats_the_player()
+        {
+            var (s, _) = Open();
+            Join(s, P2, BattleSide.Attacker);
+            Assert.True(s.Reserve(P2, "a-arch").Ok);
+            Assert.True(s.ReportAiLoss("a-arch"));
+            Assert.Equal(PlayerPhase.SideChosen, s.GetPhase(P2));
+            Assert.True(s.Reserve(P2, "a-off").Ok);
+        }
+
+        [Fact]
+        public void Ai_loss_never_takes_a_seat_away_from_a_controlling_player()
+        {
+            var (s, _) = Open();
+            Join(s, P2, BattleSide.Attacker);
+            s.Confirm(P2, s.Reserve(P2, "a-arch").Reservation!.Id);
+            Assert.False(s.ReportAiLoss("a-arch"));
+            Assert.Equal(PlayerPhase.Controlling, s.GetPhase(P2));
+        }
+
+        [Fact]
+        public void Agent_dying_before_confirm_cancels_the_reservation_and_a_late_confirm_fails()
+        {
+            var (s, _) = Open();
+            Join(s, P2, BattleSide.Attacker);
+            var r = s.Reserve(P2, "a-lord2");
+            Assert.Equal(DownOutcome.Reallocate, s.ReportDown(P2));
+            Assert.NotEqual(SessionError.None, s.Confirm(P2, r.Reservation!.Id));
+            Assert.DoesNotContain(s.GetSlots(P2), v => v.Id == "a-lord2");
+        }
+
+        [Fact]
+        public void Participant_cap_includes_the_initiator_and_frees_up_when_someone_leaves()
+        {
+            var (s, _) = Open();                              // MaxParticipants = 4
+            Assert.Equal(SessionError.None, s.Invite(P2));
+            Assert.Equal(SessionError.None, s.Invite(P3));
+            Assert.Equal(SessionError.None, s.Invite(P4));
+            Assert.Equal(SessionError.SessionFull, s.Invite(new PlayerId(5)));
+            s.Disconnect(P3);
+            Assert.Equal(SessionError.None, s.Invite(new PlayerId(5)));
+        }
+
+        [Fact]
+        public void Undefined_side_value_is_refused()
+        {
+            var (s, _) = Open();
+            s.Invite(P2);
+            Assert.Equal(SessionError.SideNotAllowed, s.ChooseSide(P2, (BattleSide)7));
+            Assert.Equal(PlayerPhase.Invited, s.GetPhase(P2));
+        }
+
+        [Fact]
+        public void Epoch_comes_from_the_options()
+        {
+            var s = new BattleSession("b", Catalog(), new ManualClock(), new SessionOptions { Epoch = 42 }, Host, BattleSide.Attacker, "a-lord1");
+            Assert.Equal(42u, s.Epoch);
+        }
+
+        /// <summary>Clock that moves on every read: time passes between the session sweep and the reservation service call.</summary>
+        private sealed class TickingClock : IClock
+        {
+            private long _now;
+
+            public long NowMs => System.Threading.Interlocked.Add(ref _now, 4_000);
+        }
+
+        [Fact]
+        public void Expiry_noticed_inside_another_call_never_loses_the_slot_change()
+        {
+            var clock = new TickingClock();
+            var s = new BattleSession("b", Catalog(), clock, null, Host, BattleSide.Attacker, "a-lord1");
+            Join(s, P2, BattleSide.Attacker);
+            Join(s, P3, BattleSide.Attacker);
+            Assert.True(s.Reserve(P2, "a-lord2").Ok);
+            s.DrainEvents();
+            // Each clock read advances 4 s, so P2's reservation expires inside this call, after the session's own sweep.
+            s.Disconnect(P2);
+            s.Disconnect(P3);
+            var ev = s.DrainEvents();
+            Assert.Contains(ev, e => e.Kind == SessionEventKind.SlotChanged && e.SlotId == "a-lord2");
+        }
+
+        [Fact]
+        public void Two_players_claim_the_same_lord_concurrently_one_wins()
+        {
+            for (var round = 0; round < 200; round++)
+            {
+                var (s, _) = Open();
+                Join(s, P2, BattleSide.Attacker);
+                Join(s, P3, BattleSide.Attacker);
+                var res = new ReserveResult[2];
+                var gate = new ManualResetEventSlim();
+                var tasks = new[] { P2, P3 }.Select((p, i) => Task.Run(() =>
+                {
+                    gate.Wait();
+                    res[i] = s.Reserve(p, "a-lord2");
+                })).ToArray();
+                gate.Set();
+                Task.WaitAll(tasks);
+                Assert.Equal(1, res.Count(r => r.Ok));
+            }
+        }
+
+        [Fact]
+        public void Catalog_changes_while_other_threads_list_slots_do_not_corrupt_anything()
+        {
+            var (s, _) = Open();
+            Join(s, P2, BattleSide.Attacker);
+            var stop = false;
+            var errors = new System.Collections.Concurrent.ConcurrentBag<System.Exception>();
+            var readers = Enumerable.Range(0, 3).Select(_ => Task.Run(() =>
+            {
+                try
+                {
+                    while (!stop)
+                        s.GetSlots(P2).ToList();
+                }
+                catch (System.Exception e)
+                {
+                    errors.Add(e);
+                }
+            })).ToArray();
+            for (var i = 0; i < 300; i++)
+                s.AddSlot(new SlotDefinition("x" + i, BattleSide.Attacker, SlotKind.TroopClass, "X", 1, 100 + i));
+            stop = true;
+            Task.WaitAll(readers);
+            Assert.Empty(errors);
+            Assert.Equal(300 + 5, s.GetSlots(P2).Count);
+        }
+
+        [Fact]
+        public void End_racing_with_reserve_never_leaves_a_live_reservation()
+        {
+            for (var round = 0; round < 100; round++)
+            {
+                var (s, _) = Open();
+                Join(s, P2, BattleSide.Attacker);
+                var gate = new ManualResetEventSlim();
+                var t1 = Task.Run(() =>
+                {
+                    gate.Wait();
+                    s.Reserve(P2, "a-lord2");
+                });
+                var t2 = Task.Run(() =>
+                {
+                    gate.Wait();
+                    s.End();
+                });
+                gate.Set();
+                Task.WaitAll(t1, t2);
+                Assert.Equal(PlayerPhase.Ended, s.GetPhase(P2));
+                Assert.Equal(SessionError.BattleClosed, s.Reserve(P2, "a-off").Error);
+            }
         }
     }
 }

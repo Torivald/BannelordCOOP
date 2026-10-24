@@ -20,6 +20,7 @@ namespace BannerCoopTW.Core.Battle
         WrongState,
     }
 
+    /// <summary>A seat held by a player. Instances handed out are snapshots-by-reference: read <see cref="State"/> only through the service or right after the call that returned it.</summary>
     public sealed class Reservation
     {
         internal Reservation(long id, PlayerId player, string slotId, long expiresAtMs)
@@ -38,17 +39,22 @@ namespace BannerCoopTW.Core.Battle
 
         public long ExpiresAtMs { get; }
 
-        /// <summary>Reserved until confirmed; then Controlled.</summary>
+        /// <summary>Reserved until confirmed; then Controlled. Written only under the service lock.</summary>
         public SeatState State { get; internal set; } = SeatState.Reserved;
+
+        /// <summary>The initiator's own hero: never goes back to the free pool.</summary>
+        public bool Pinned { get; internal set; }
     }
 
     /// <summary>
     /// Atomic seat bookkeeping: a seat of a slot goes to exactly one player. Every public member takes one lock, so two
     /// simultaneous claims for the last seat have a single winner. A player holds at most one seat.
-    /// Expiry is lazy and deterministic: it runs on every call and can also be driven by <see cref="ExpireDue"/>.
+    /// Expiry is lazy: it runs inside every call; expired reservations are queued and reported exactly once through <see cref="ExpireDue"/>.
     /// </summary>
     public sealed class ReservationService
     {
+        public const int MaxSeatsPerSlot = ushort.MaxValue;
+
         private readonly object _gate = new object();
         private readonly IClock _clock;
         private readonly int _timeoutMs;
@@ -110,14 +116,14 @@ namespace BannerCoopTW.Core.Battle
             }
         }
 
-        /// <summary>Hands a seat straight to a player as Controlled (the initiator's own hero is seeded this way, so nobody else can claim it).</summary>
+        /// <summary>Hands a seat straight to a player as Controlled and pinned (the initiator's own hero: nobody else can ever claim it).</summary>
         public Reservation SeedControlled(PlayerId player, string slotId)
         {
             lock (_gate)
             {
                 if (!_capacity.ContainsKey(slotId) || AvailableLocked(slotId) < 1 || _held.ContainsKey(player))
                     throw new InvalidOperationException("Cannot seed " + slotId + " for " + player);
-                var r = new Reservation(_nextId++, player, slotId, long.MaxValue) { State = SeatState.Controlled };
+                var r = new Reservation(_nextId++, player, slotId, long.MaxValue) { State = SeatState.Controlled, Pinned = true };
                 _held[player] = r;
                 return r;
             }
@@ -149,7 +155,7 @@ namespace BannerCoopTW.Core.Battle
                 ExpireDueLocked();
                 if (_held.TryGetValue(player, out var r) && r.Id == reservationId)
                 {
-                    if (r.State != SeatState.Reserved)
+                    if (!SeatStateMachine.CanTransition(r.State, SeatState.Controlled))
                         return ConfirmError.WrongState;
                     r.State = SeatState.Controlled;
                     reservation = r;
@@ -160,7 +166,10 @@ namespace BannerCoopTW.Core.Battle
             }
         }
 
-        /// <summary>Gives the seat back (cancel, leave, disconnect). Returns the freed reservation or null.</summary>
+        /// <summary>
+        /// Gives the seat back (cancel, leave, disconnect). A pinned seat is not returned to the pool: it is written off as lost.
+        /// Returns the removed reservation (its <see cref="Reservation.State"/> tells whether control was released) or null.
+        /// </summary>
         public Reservation? Release(PlayerId player)
         {
             lock (_gate)
@@ -169,17 +178,19 @@ namespace BannerCoopTW.Core.Battle
                 if (!_held.TryGetValue(player, out var r))
                     return null;
                 _held.Remove(player);
+                if (r.Pinned)
+                    _lost[r.SlotId]++;
                 return r;
             }
         }
 
-        /// <summary>The player's controlled seat is gone for the battle (death / knock-out). Returns the reservation or null.</summary>
+        /// <summary>The player's seat is gone for the battle (death / knock-out), also if the agent died before the reservation was confirmed.</summary>
         public Reservation? MarkDown(PlayerId player)
         {
             lock (_gate)
             {
                 ExpireDueLocked();
-                if (!_held.TryGetValue(player, out var r) || r.State != SeatState.Controlled)
+                if (!_held.TryGetValue(player, out var r))
                     return null;
                 _held.Remove(player);
                 _lost[r.SlotId]++;
@@ -187,20 +198,50 @@ namespace BannerCoopTW.Core.Battle
             }
         }
 
+        /// <summary>
+        /// An AI-controlled agent of the slot died. The seat count shrinks: a free seat is written off; if none is free, the most
+        /// recent unconfirmed reservation is revoked (its agent is dead) and returned. Controlled seats belong to players and are never touched.
+        /// </summary>
+        public bool LoseAiSeat(string slotId, out Reservation? revoked)
+        {
+            lock (_gate)
+            {
+                revoked = null;
+                ExpireDueLocked();
+                if (!_capacity.ContainsKey(slotId))
+                    return false;
+                if (_capacity[slotId] - _lost[slotId] <= 0)
+                    return false;
+                if (AvailableLocked(slotId) < 1)
+                {
+                    revoked = _held.Values.Where(r => r.SlotId == slotId && r.State == SeatState.Reserved).OrderByDescending(r => r.Id).FirstOrDefault();
+                    if (revoked == null)
+                        return false; // every remaining seat is player-controlled: the dead agent was not an AI one
+                    _held.Remove(revoked.Player);
+                }
+
+                _lost[slotId]++;
+                return true;
+            }
+        }
+
         /// <summary>Reinforcements: raises the seat count. Existing claims are never invalidated.</summary>
-        public void AddCapacity(string slotId, int extra)
+        public bool AddCapacity(string slotId, int extra)
         {
             if (extra < 1)
                 throw new ArgumentOutOfRangeException(nameof(extra));
             lock (_gate)
             {
-                if (!_capacity.ContainsKey(slotId))
-                    throw new KeyNotFoundException(slotId);
-                _capacity[slotId] += extra;
+                if (!_capacity.TryGetValue(slotId, out var cap))
+                    return false;
+                if ((long)cap + extra > MaxSeatsPerSlot)
+                    throw new ArgumentOutOfRangeException(nameof(extra), "A slot cannot exceed " + MaxSeatsPerSlot + " seats (wire format).");
+                _capacity[slotId] = cap + extra;
+                return true;
             }
         }
 
-        /// <summary>Drops reservations whose time is up. Each expired reservation is reported exactly once (here, whichever call noticed it first).</summary>
+        /// <summary>Drains the reservations whose time ran out (each reported exactly once, whichever call noticed the expiry).</summary>
         public IReadOnlyList<Reservation> ExpireDue()
         {
             lock (_gate)

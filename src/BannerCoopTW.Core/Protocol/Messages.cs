@@ -80,6 +80,7 @@ namespace BannerCoopTW.Core.Protocol
         internal abstract void Write(BinaryWriter w);
     }
 
+    /// <summary>First message of a client. <see cref="PlayerId"/> is client-supplied and must NOT be trusted by a server: take the identity from the authenticated connection.</summary>
     public sealed class Hello : Message
     {
         public ushort ProtocolVersion { get; set; } = ProtocolInfo.Version;
@@ -145,12 +146,14 @@ namespace BannerCoopTW.Core.Protocol
             WireText.Write(w, Detail);
         }
 
-        internal static HelloReject Read(BinaryReader r) => new HelloReject { Reason = (RejectReason)r.ReadByte(), Detail = WireText.Read(r) };
+        internal static HelloReject Read(BinaryReader r) => new HelloReject { Reason = WireRead.Enum<RejectReason>(r), Detail = WireText.Read(r) };
     }
 
     public sealed class BattleInvite : Message
     {
         public string BattleId { get; set; } = "";
+
+        public uint Epoch { get; set; }
 
         public BattleSide InitiatorSide { get; set; }
 
@@ -161,16 +164,20 @@ namespace BannerCoopTW.Core.Protocol
         internal override void Write(BinaryWriter w)
         {
             WireText.Write(w, BattleId);
+            w.Write(Epoch);
             w.Write((byte)InitiatorSide);
             w.Write(AllowPvp);
         }
 
-        internal static BattleInvite Read(BinaryReader r) => new BattleInvite { BattleId = WireText.Read(r), InitiatorSide = (BattleSide)r.ReadByte(), AllowPvp = r.ReadBoolean() };
+        internal static BattleInvite Read(BinaryReader r) => new BattleInvite { BattleId = WireText.Read(r), Epoch = r.ReadUInt32(), InitiatorSide = WireRead.Enum<BattleSide>(r), AllowPvp = WireRead.Bool(r) };
     }
 
     /// <summary>Client picks a side, or spectates (<see cref="Spectate"/> = true).</summary>
     public sealed class ChooseSide : Message
     {
+        /// <summary>Battle epoch from the invite; a request for another battle is refused.</summary>
+        public uint Epoch { get; set; }
+
         public bool Spectate { get; set; }
 
         public BattleSide Side { get; set; }
@@ -179,11 +186,12 @@ namespace BannerCoopTW.Core.Protocol
 
         internal override void Write(BinaryWriter w)
         {
+            w.Write(Epoch);
             w.Write(Spectate);
             w.Write((byte)Side);
         }
 
-        internal static ChooseSide Read(BinaryReader r) => new ChooseSide { Spectate = r.ReadBoolean(), Side = (BattleSide)r.ReadByte() };
+        internal static ChooseSide Read(BinaryReader r) => new ChooseSide { Epoch = r.ReadUInt32(), Spectate = WireRead.Bool(r), Side = WireRead.Enum<BattleSide>(r) };
     }
 
     public sealed class SlotList : Message
@@ -205,6 +213,8 @@ namespace BannerCoopTW.Core.Protocol
 
     public sealed class ReserveRequest : Message
     {
+        public uint Epoch { get; set; }
+
         public uint RequestId { get; set; }
 
         public string SlotId { get; set; } = "";
@@ -213,11 +223,12 @@ namespace BannerCoopTW.Core.Protocol
 
         internal override void Write(BinaryWriter w)
         {
+            w.Write(Epoch);
             w.Write(RequestId);
             WireText.Write(w, SlotId);
         }
 
-        internal static ReserveRequest Read(BinaryReader r) => new ReserveRequest { RequestId = r.ReadUInt32(), SlotId = WireText.Read(r) };
+        internal static ReserveRequest Read(BinaryReader r) => new ReserveRequest { Epoch = r.ReadUInt32(), RequestId = r.ReadUInt32(), SlotId = WireText.Read(r) };
     }
 
     public sealed class ReserveResponse : Message
@@ -244,21 +255,28 @@ namespace BannerCoopTW.Core.Protocol
         internal static ReserveResponse Read(BinaryReader r) => new ReserveResponse
         {
             RequestId = r.ReadUInt32(),
-            Error = (SessionError)r.ReadByte(),
+            Error = WireRead.Enum<SessionError>(r),
             ReservationId = r.ReadInt64(),
             ExpiresInMs = r.ReadInt32(),
         };
     }
 
+    /// <summary>Client acknowledgement that it has loaded the battle and wants the reservation bound. The server only acts on it if configured to (the engine normally confirms).</summary>
     public sealed class ConfirmRequest : Message
     {
+        public uint Epoch { get; set; }
+
         public long ReservationId { get; set; }
 
         public override MessageType Type => MessageType.ConfirmRequest;
 
-        internal override void Write(BinaryWriter w) => w.Write(ReservationId);
+        internal override void Write(BinaryWriter w)
+        {
+            w.Write(Epoch);
+            w.Write(ReservationId);
+        }
 
-        internal static ConfirmRequest Read(BinaryReader r) => new ConfirmRequest { ReservationId = r.ReadInt64() };
+        internal static ConfirmRequest Read(BinaryReader r) => new ConfirmRequest { Epoch = r.ReadUInt32(), ReservationId = r.ReadInt64() };
     }
 
     public sealed class ConfirmResponse : Message
@@ -275,18 +293,18 @@ namespace BannerCoopTW.Core.Protocol
             w.Write((byte)Error);
         }
 
-        internal static ConfirmResponse Read(BinaryReader r) => new ConfirmResponse { ReservationId = r.ReadInt64(), Error = (SessionError)r.ReadByte() };
+        internal static ConfirmResponse Read(BinaryReader r) => new ConfirmResponse { ReservationId = r.ReadInt64(), Error = WireRead.Enum<SessionError>(r) };
     }
 
     public sealed class ReleaseRequest : Message
     {
+        public uint Epoch { get; set; }
+
         public override MessageType Type => MessageType.ReleaseRequest;
 
-        internal override void Write(BinaryWriter w)
-        {
-        }
+        internal override void Write(BinaryWriter w) => w.Write(Epoch);
 
-        internal static ReleaseRequest Read(BinaryReader r) => new ReleaseRequest();
+        internal static ReleaseRequest Read(BinaryReader r) => new ReleaseRequest { Epoch = r.ReadUInt32() };
     }
 
     /// <summary>Delta: only slots whose availability changed (Available = 0 means gone).</summary>
@@ -331,7 +349,7 @@ namespace BannerCoopTW.Core.Protocol
         {
             Revision = r.ReadInt32(),
             PlayerId = r.ReadUInt64(),
-            Phase = (PlayerPhase)r.ReadByte(),
+            Phase = WireRead.Enum<PlayerPhase>(r),
             SlotId = WireText.Read(r),
         };
     }
@@ -345,6 +363,26 @@ namespace BannerCoopTW.Core.Protocol
         internal override void Write(BinaryWriter w) => WireText.Write(w, BattleId);
 
         internal static BattleEnded Read(BinaryReader r) => new BattleEnded { BattleId = WireText.Read(r) };
+    }
+
+    internal static class WireRead
+    {
+        public static T Enum<T>(BinaryReader r) where T : struct, Enum
+        {
+            var raw = r.ReadByte();
+            var value = (T)System.Enum.ToObject(typeof(T), raw);
+            if (!System.Enum.IsDefined(typeof(T), value))
+                throw new FormatException("Undefined " + typeof(T).Name + " value " + raw);
+            return value;
+        }
+
+        public static bool Bool(BinaryReader r)
+        {
+            var b = r.ReadByte();
+            if (b > 1)
+                throw new FormatException("Bad boolean " + b);
+            return b == 1;
+        }
     }
 
     internal static class WireText
@@ -364,6 +402,8 @@ namespace BannerCoopTW.Core.Protocol
         public static string Read(BinaryReader r)
         {
             int n = r.ReadUInt16();
+            if (n > MaxLength)
+                throw new FormatException("String too long: " + n);
             var bytes = r.ReadBytes(n);
             if (bytes.Length != n)
                 throw new EndOfStreamException();
@@ -382,6 +422,8 @@ namespace BannerCoopTW.Core.Protocol
         public static List<string> ReadList(BinaryReader r)
         {
             int n = r.ReadUInt16();
+            if (n > MaxItems)
+                throw new FormatException("List too long: " + n);
             var list = new List<string>(Math.Min(n, 64));
             for (var i = 0; i < n; i++)
                 list.Add(Read(r));
@@ -396,6 +438,8 @@ namespace BannerCoopTW.Core.Protocol
             w.Write((ushort)slots.Count);
             foreach (var s in slots)
             {
+                if (s.Capacity < 0 || s.Capacity > ushort.MaxValue || s.Available < 0 || s.Available > ushort.MaxValue)
+                    throw new ArgumentException("Slot counts do not fit the wire format: " + s.Id);
                 WireText.Write(w, s.Id);
                 w.Write((byte)s.Side);
                 w.Write((byte)s.Kind);
@@ -412,8 +456,8 @@ namespace BannerCoopTW.Core.Protocol
             for (var i = 0; i < n; i++)
             {
                 var id = WireText.Read(r);
-                var side = (BattleSide)r.ReadByte();
-                var kind = (SlotKind)r.ReadByte();
+                var side = WireRead.Enum<BattleSide>(r);
+                var kind = WireRead.Enum<SlotKind>(r);
                 var label = WireText.Read(r);
                 list.Add(new SlotInfo(id, side, kind, label, r.ReadUInt16(), r.ReadUInt16()));
             }

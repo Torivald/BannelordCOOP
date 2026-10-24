@@ -17,6 +17,10 @@ namespace BannerCoopTW.Core.Battle
         SlotUnavailable,
         ReservationExpired,
         ReservationNotFound,
+        /// <summary>MaxParticipants (4, ADR-0007) reached.</summary>
+        SessionFull,
+        /// <summary>The request was meant for another battle (epoch mismatch).</summary>
+        StaleBattle,
     }
 
     public enum SessionEventKind : byte
@@ -25,7 +29,7 @@ namespace BannerCoopTW.Core.Battle
         SlotChanged,
         PlayerPhaseChanged,
         ReservationExpired,
-        /// <summary>A controlling player left or disconnected; the engine side may hand the agent back to AI.</summary>
+        /// <summary>A player stopped controlling an agent (release, spectate, disconnect): the engine side should hand it back to AI.</summary>
         ControlReleased,
         BattleEnded,
     }
@@ -76,15 +80,21 @@ namespace BannerCoopTW.Core.Battle
 
     public sealed class ReserveResult
     {
-        internal ReserveResult(SessionError error, Reservation? reservation)
+        internal ReserveResult(SessionError error, Reservation? reservation, long expiresAtMs = 0)
         {
             Error = error;
             Reservation = reservation;
+            ExpiresAtMs = expiresAtMs;
         }
 
         public SessionError Error { get; }
 
         public Reservation? Reservation { get; }
+
+        /// <summary>Copy taken under the lock (the reservation object itself may change later).</summary>
+        public long ExpiresAtMs { get; }
+
+        public long ReservationId => Reservation?.Id ?? 0;
 
         public bool Ok => Error == SessionError.None;
     }
@@ -124,19 +134,23 @@ namespace BannerCoopTW.Core.Battle
         public BattleSession(string battleId, SlotCatalog catalog, IClock clock, SessionOptions? options, PlayerId initiator, BattleSide initiatorSide, string initiatorSlotId)
         {
             BattleId = battleId;
-            _catalog = catalog;
+            _catalog = catalog.Clone(); // the session owns its catalog: mid-battle AddSlot must not leak into a shared instance
             _options = options ?? new SessionOptions();
-            _reservations = new ReservationService(catalog, clock, _options.ReservationTimeoutMs);
+            Epoch = _options.Epoch;
+            _reservations = new ReservationService(_catalog, clock, _options.ReservationTimeoutMs);
             Initiator = initiator;
             InitiatorSide = initiatorSide;
 
-            if (!catalog.TryGet(initiatorSlotId, out var slot) || slot.Side != initiatorSide)
+            if (!_catalog.TryGet(initiatorSlotId, out var slot) || slot.Side != initiatorSide)
                 throw new ArgumentException("Initiator slot must exist on the initiator's side.", nameof(initiatorSlotId));
             _reservations.SeedControlled(initiator, initiatorSlotId);
             _players[initiator] = new PlayerInfo { Phase = PlayerPhase.Controlling, Side = initiatorSide };
         }
 
         public string BattleId { get; }
+
+        /// <summary>Distinguishes this battle from earlier/later ones that reuse slot ids; requests carry it (<see cref="SessionError.StaleBattle"/>).</summary>
+        public uint Epoch { get; }
 
         public PlayerId Initiator { get; }
 
@@ -191,14 +205,23 @@ namespace BannerCoopTW.Core.Battle
         {
             lock (_gate)
             {
-                Sync();
-                if (_ended || !_accepting)
-                    return SessionError.BattleClosed;
-                if (_players.ContainsKey(player))
-                    return SessionError.AlreadyInSession; // reconnect is a later milestone
-                _players[player] = new PlayerInfo();
-                Emit(SessionEventKind.PlayerPhaseChanged, player, null);
-                return SessionError.None;
+                try
+                {
+                    Sync();
+                    if (_ended || !_accepting)
+                        return SessionError.BattleClosed;
+                    if (_players.ContainsKey(player))
+                        return SessionError.AlreadyInSession; // reconnect is a later milestone
+                    if (_players.Values.Count(x => x.Phase != PlayerPhase.Left && x.Phase != PlayerPhase.Ended) >= _options.MaxParticipants)
+                        return SessionError.SessionFull;
+                    _players[player] = new PlayerInfo();
+                    Emit(SessionEventKind.PlayerPhaseChanged, player, null);
+                    return SessionError.None;
+                }
+                finally
+                {
+                    Sync();
+                }
             }
         }
 
@@ -206,27 +229,41 @@ namespace BannerCoopTW.Core.Battle
         public void CloseJoining()
         {
             lock (_gate)
+            {
+                if (!_accepting)
+                    return;
                 _accepting = false;
+                Emit(SessionEventKind.PlayerPhaseChanged, null, null);
+            }
         }
 
         public SessionError ChooseSide(PlayerId player, BattleSide side)
         {
             lock (_gate)
             {
-                Sync();
-                if (_ended)
-                    return SessionError.BattleClosed;
-                if (!_players.TryGetValue(player, out var p))
-                    return SessionError.UnknownPlayer;
-                if (p.Phase == PlayerPhase.Invited && !_accepting)
-                    return SessionError.BattleClosed;
-                if (p.Phase != PlayerPhase.Invited && p.Phase != PlayerPhase.SideChosen && !(p.Phase == PlayerPhase.Spectating && _options.AllowReallocation))
-                    return SessionError.WrongPhase;
-                if (!_options.AllowPvp && side != InitiatorSide)
-                    return SessionError.SideNotAllowed;
-                p.Side = side;
-                SetPhase(player, p, PlayerPhase.SideChosen);
-                return SessionError.None;
+                try
+                {
+                    Sync();
+                    if (_ended)
+                        return SessionError.BattleClosed;
+                    if (!_players.TryGetValue(player, out var p))
+                        return SessionError.UnknownPlayer;
+                    if (!Enum.IsDefined(typeof(BattleSide), side))
+                        return SessionError.SideNotAllowed;
+                    if (p.Phase == PlayerPhase.Invited && !_accepting)
+                        return SessionError.BattleClosed;
+                    if (p.Phase != PlayerPhase.Invited && p.Phase != PlayerPhase.SideChosen && !(p.Phase == PlayerPhase.Spectating && _options.AllowReallocation))
+                        return SessionError.WrongPhase;
+                    if (!_options.AllowPvp && side != InitiatorSide)
+                        return SessionError.SideNotAllowed;
+                    p.Side = side;
+                    SetPhase(player, p, PlayerPhase.SideChosen);
+                    return SessionError.None;
+                }
+                finally
+                {
+                    Sync();
+                }
             }
         }
 
@@ -234,19 +271,28 @@ namespace BannerCoopTW.Core.Battle
         {
             lock (_gate)
             {
-                Sync();
-                if (_ended)
-                    return SessionError.BattleClosed;
-                if (!_players.TryGetValue(player, out var p))
-                    return SessionError.UnknownPlayer;
-                if (p.Phase == PlayerPhase.Left || p.Phase == PlayerPhase.Ended)
-                    return SessionError.WrongPhase;
-                if (p.Phase == PlayerPhase.Spectating)
+                try
+                {
+                    Sync();
+                    if (_ended)
+                        return SessionError.BattleClosed;
+                    if (!_players.TryGetValue(player, out var p))
+                        return SessionError.UnknownPlayer;
+                    if (p.Phase == PlayerPhase.Left || p.Phase == PlayerPhase.Ended)
+                        return SessionError.WrongPhase;
+                    if (p.Phase == PlayerPhase.Spectating)
+                        return SessionError.None;
+                    if (player == Initiator && p.Phase == PlayerPhase.Controlling)
+                        return SessionError.WrongPhase; // the initiator cannot give up their own hero
+                    FreeSeat(player);
+                    p.Side = null;
+                    SetPhase(player, p, PlayerPhase.Spectating);
                     return SessionError.None;
-                FreeSeat(player);
-                p.Side = null;
-                SetPhase(player, p, PlayerPhase.Spectating);
-                return SessionError.None;
+                }
+                finally
+                {
+                    Sync();
+                }
             }
         }
 
@@ -274,27 +320,34 @@ namespace BannerCoopTW.Core.Battle
         {
             lock (_gate)
             {
-                Sync();
-                if (_ended)
-                    return new ReserveResult(SessionError.BattleClosed, null);
-                if (!_players.TryGetValue(player, out var p))
-                    return new ReserveResult(SessionError.UnknownPlayer, null);
-                if (p.Phase != PlayerPhase.SideChosen)
-                    return new ReserveResult(SessionError.WrongPhase, null);
-                if (!_catalog.TryGet(slotId, out var def))
-                    return new ReserveResult(SessionError.UnknownSlot, null);
-                if (def.Side != p.Side)
-                    return new ReserveResult(SessionError.WrongSide, null);
-                switch (_reservations.TryReserve(player, slotId, out var r))
+                try
                 {
-                    case ReserveError.None:
-                        SetPhase(player, p, PlayerPhase.Reserved);
-                        Emit(SessionEventKind.SlotChanged, player, slotId);
-                        return new ReserveResult(SessionError.None, r);
-                    case ReserveError.UnknownSlot:
+                    Sync();
+                    if (_ended)
+                        return new ReserveResult(SessionError.BattleClosed, null);
+                    if (!_players.TryGetValue(player, out var p))
+                        return new ReserveResult(SessionError.UnknownPlayer, null);
+                    if (p.Phase != PlayerPhase.SideChosen)
+                        return new ReserveResult(SessionError.WrongPhase, null);
+                    if (!_catalog.TryGet(slotId, out var def))
                         return new ReserveResult(SessionError.UnknownSlot, null);
-                    default:
-                        return new ReserveResult(SessionError.SlotUnavailable, null);
+                    if (def.Side != p.Side)
+                        return new ReserveResult(SessionError.WrongSide, null);
+                    switch (_reservations.TryReserve(player, slotId, out var r))
+                    {
+                        case ReserveError.None:
+                            SetPhase(player, p, PlayerPhase.Reserved);
+                            Emit(SessionEventKind.SlotChanged, player, slotId);
+                            return new ReserveResult(SessionError.None, r, r!.ExpiresAtMs);
+                        case ReserveError.UnknownSlot:
+                            return new ReserveResult(SessionError.UnknownSlot, null);
+                        default:
+                            return new ReserveResult(SessionError.SlotUnavailable, null);
+                    }
+                }
+                finally
+                {
+                    Sync();
                 }
             }
         }
@@ -304,69 +357,110 @@ namespace BannerCoopTW.Core.Battle
         {
             lock (_gate)
             {
-                Sync();
-                if (_ended)
-                    return SessionError.BattleClosed;
-                if (!_players.TryGetValue(player, out var p))
-                    return SessionError.UnknownPlayer;
-                switch (_reservations.TryConfirm(player, reservationId, out _))
+                try
                 {
-                    case ConfirmError.None:
-                        SetPhase(player, p, PlayerPhase.Controlling);
-                        return SessionError.None;
-                    case ConfirmError.Expired:
-                        Sync();
-                        return SessionError.ReservationExpired;
-                    case ConfirmError.WrongState:
-                        return SessionError.WrongPhase;
-                    default:
-                        return SessionError.ReservationNotFound;
+                    Sync();
+                    if (_ended)
+                        return SessionError.BattleClosed;
+                    if (!_players.TryGetValue(player, out var p))
+                        return SessionError.UnknownPlayer;
+                    switch (_reservations.TryConfirm(player, reservationId, out _))
+                    {
+                        case ConfirmError.None:
+                            SetPhase(player, p, PlayerPhase.Controlling);
+                            return SessionError.None;
+                        case ConfirmError.Expired:
+                            return SessionError.ReservationExpired;
+                        case ConfirmError.WrongState:
+                            return SessionError.WrongPhase;
+                        default:
+                            return SessionError.ReservationNotFound;
+                    }
+                }
+                finally
+                {
+                    Sync();
                 }
             }
         }
 
-        /// <summary>Cancels a reservation or gives control back; the player returns to slot selection on the same side.</summary>
+        /// <summary>Cancels a reservation or gives control back; the player returns to slot selection on the same side. Not available to the initiator for their own hero.</summary>
         public SessionError Release(PlayerId player)
         {
             lock (_gate)
             {
-                Sync();
-                if (_ended)
-                    return SessionError.BattleClosed;
-                if (!_players.TryGetValue(player, out var p))
-                    return SessionError.UnknownPlayer;
-                if (p.Phase != PlayerPhase.Reserved && p.Phase != PlayerPhase.Controlling)
-                    return SessionError.WrongPhase;
-                FreeSeat(player);
-                SetPhase(player, p, PlayerPhase.SideChosen);
-                return SessionError.None;
+                try
+                {
+                    Sync();
+                    if (_ended)
+                        return SessionError.BattleClosed;
+                    if (!_players.TryGetValue(player, out var p))
+                        return SessionError.UnknownPlayer;
+                    if (p.Phase != PlayerPhase.Reserved && p.Phase != PlayerPhase.Controlling)
+                        return SessionError.WrongPhase;
+                    if (player == Initiator && p.Phase == PlayerPhase.Controlling)
+                        return SessionError.WrongPhase;
+                    FreeSeat(player);
+                    SetPhase(player, p, PlayerPhase.SideChosen);
+                    return SessionError.None;
+                }
+                finally
+                {
+                    Sync();
+                }
             }
         }
 
         /// <summary>
-        /// A controlled character died, or an immortal hero was knocked out (ADR-0007). The seat is lost for this battle; the player goes
-        /// back to selection if another slot is free on their side, otherwise spectates.
+        /// The player's agent died (also before the reservation was confirmed) or an immortal hero was knocked out (ADR-0007). The seat is
+        /// lost for this battle; the player goes back to selection if another slot is free on their side, otherwise spectates.
         /// </summary>
         public DownOutcome ReportDown(PlayerId player)
         {
             lock (_gate)
             {
-                Sync();
-                if (_ended || !_players.TryGetValue(player, out var p) || p.Phase != PlayerPhase.Controlling)
-                    return DownOutcome.NotControlling;
-                var r = _reservations.MarkDown(player);
-                if (r == null)
-                    return DownOutcome.NotControlling;
-                Emit(SessionEventKind.SlotChanged, player, r.SlotId);
-                if (_options.AllowReallocation && p.Side != null && SlotsFor(p.Side.Value).Count > 0)
+                try
                 {
-                    SetPhase(player, p, PlayerPhase.SideChosen);
-                    return DownOutcome.Reallocate;
+                    Sync();
+                    if (_ended || !_players.TryGetValue(player, out var p) || (p.Phase != PlayerPhase.Controlling && p.Phase != PlayerPhase.Reserved))
+                        return DownOutcome.NotControlling;
+                    var r = _reservations.MarkDown(player);
+                    if (r == null)
+                        return DownOutcome.NotControlling;
+                    Emit(SessionEventKind.SlotChanged, player, r.SlotId);
+                    return Reseat(player, p);
                 }
+                finally
+                {
+                    Sync();
+                }
+            }
+        }
 
-                p.Side = null;
-                SetPhase(player, p, PlayerPhase.Spectating);
-                return DownOutcome.Spectate;
+        /// <summary>
+        /// An AI-controlled agent of a slot died (e.g. one of two archers). The seat count shrinks; if the last free seat was an unconfirmed
+        /// reservation, that player is sent back to selection or spectating. Returns false for an unknown slot.
+        /// </summary>
+        public bool ReportAiLoss(string slotId)
+        {
+            lock (_gate)
+            {
+                try
+                {
+                    Sync();
+                    if (_ended || !_catalog.TryGet(slotId, out _))
+                        return false;
+                    if (!_reservations.LoseAiSeat(slotId, out var revoked))
+                        return false;
+                    Emit(SessionEventKind.SlotChanged, null, slotId);
+                    if (revoked != null && _players.TryGetValue(revoked.Player, out var p) && p.Phase == PlayerPhase.Reserved)
+                        Reseat(revoked.Player, p);
+                    return true;
+                }
+                finally
+                {
+                    Sync();
+                }
             }
         }
 
@@ -374,41 +468,48 @@ namespace BannerCoopTW.Core.Battle
         {
             lock (_gate)
             {
-                Sync();
-                if (!_players.TryGetValue(player, out var p) || p.Phase == PlayerPhase.Left || p.Phase == PlayerPhase.Ended)
-                    return;
-                var wasControlling = p.Phase == PlayerPhase.Controlling;
-                var slot = FreeSeat(player);
-                if (wasControlling)
-                    Emit(SessionEventKind.ControlReleased, player, slot);
-                SetPhase(player, p, PlayerPhase.Left);
+                try
+                {
+                    Sync();
+                    if (!_players.TryGetValue(player, out var p) || p.Phase == PlayerPhase.Left || p.Phase == PlayerPhase.Ended)
+                        return;
+                    FreeSeat(player);
+                    SetPhase(player, p, PlayerPhase.Left);
+                }
+                finally
+                {
+                    Sync();
+                }
             }
         }
 
         // ---------------------------------------------------------------- reinforcements, end, time
 
         /// <summary>More troops of an existing class arrived. Existing ownership is untouched.</summary>
-        public void AddReinforcements(string slotId, int count)
+        public SessionError AddReinforcements(string slotId, int count)
         {
             lock (_gate)
             {
                 if (_ended)
-                    return;
-                _reservations.AddCapacity(slotId, count);
+                    return SessionError.BattleClosed;
+                if (!_reservations.AddCapacity(slotId, count))
+                    return SessionError.UnknownSlot;
                 Emit(SessionEventKind.SlotChanged, null, slotId);
+                return SessionError.None;
             }
         }
 
         /// <summary>A new slot appears mid-battle (a new troop class, a lord arriving with reinforcements).</summary>
-        public void AddSlot(SlotDefinition slot)
+        public SessionError AddSlot(SlotDefinition slot)
         {
             lock (_gate)
             {
                 if (_ended)
-                    return;
+                    return SessionError.BattleClosed;
                 _catalog.Extend(slot);
                 _reservations.Register(slot);
                 Emit(SessionEventKind.SlotChanged, null, slot.Id);
+                return SessionError.None;
             }
         }
 
@@ -428,7 +529,7 @@ namespace BannerCoopTW.Core.Battle
             }
         }
 
-        /// <summary>Expires due reservations (also happens lazily on every call). Returns the players who lost one.</summary>
+        /// <summary>Expires due reservations (also happens in every call). Returns the players who lost one.</summary>
         public IReadOnlyList<PlayerId> Tick()
         {
             lock (_gate)
@@ -448,16 +549,33 @@ namespace BannerCoopTW.Core.Battle
 
         // ---------------------------------------------------------------- internals (caller holds the lock)
 
+        private DownOutcome Reseat(PlayerId player, PlayerInfo p)
+        {
+            if (_options.AllowReallocation && p.Side != null && SlotsFor(p.Side.Value).Count > 0)
+            {
+                SetPhase(player, p, PlayerPhase.SideChosen);
+                return DownOutcome.Reallocate;
+            }
+
+            p.Side = null;
+            SetPhase(player, p, PlayerPhase.Spectating);
+            return DownOutcome.Spectate;
+        }
+
+        /// <summary>
+        /// Drains expiries noticed by the reservation service (in any call, also with a clock that moves between calls) and brings the
+        /// player phases and the event stream in line. A slot is always announced as changed, even if its owner has already left.
+        /// </summary>
         private IReadOnlyList<PlayerId> Sync()
         {
             var lost = new List<PlayerId>();
             foreach (var r in _reservations.ExpireDue())
             {
+                Emit(SessionEventKind.SlotChanged, r.Player, r.SlotId);
                 if (_ended || !_players.TryGetValue(r.Player, out var p) || p.Phase != PlayerPhase.Reserved)
                     continue;
                 SetPhase(r.Player, p, PlayerPhase.SideChosen);
                 Emit(SessionEventKind.ReservationExpired, r.Player, r.SlotId);
-                Emit(SessionEventKind.SlotChanged, r.Player, r.SlotId);
                 lost.Add(r.Player);
             }
 
@@ -467,9 +585,12 @@ namespace BannerCoopTW.Core.Battle
         private string? FreeSeat(PlayerId player)
         {
             var r = _reservations.Release(player);
-            if (r != null)
-                Emit(SessionEventKind.SlotChanged, player, r.SlotId);
-            return r?.SlotId;
+            if (r == null)
+                return null;
+            Emit(SessionEventKind.SlotChanged, player, r.SlotId);
+            if (r.State == SeatState.Controlled)
+                Emit(SessionEventKind.ControlReleased, player, r.SlotId);
+            return r.SlotId;
         }
 
         private void SetPhase(PlayerId id, PlayerInfo p, PlayerPhase to)

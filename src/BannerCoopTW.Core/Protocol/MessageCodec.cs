@@ -98,7 +98,7 @@ namespace BannerCoopTW.Core.Protocol
                     return new DecodeResult(DecodeError.None, message, version);
                 }
             }
-            catch (Exception e) when (e is EndOfStreamException || e is ArgumentException || e is IOException)
+            catch (Exception e) when (e is EndOfStreamException || e is ArgumentException || e is IOException || e is FormatException)
             {
                 return new DecodeResult(DecodeError.Malformed, null, version);
             }

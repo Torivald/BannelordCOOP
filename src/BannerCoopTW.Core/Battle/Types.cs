@@ -84,6 +84,12 @@ namespace BannerCoopTW.Core.Battle
             }
         }
 
+        /// <summary>Players in the battle including the initiator (ADR-0007: MVP is 4).</summary>
+        public int MaxParticipants { get; set; } = 4;
+
+        /// <summary>Identifies this battle on the wire; requests for another epoch are refused.</summary>
+        public uint Epoch { get; set; } = 1;
+
         /// <summary>PvP (ADR-0007): players may join the opposing side. When false only the initiator's side is allowed.</summary>
         public bool AllowPvp { get; set; } = true;
 

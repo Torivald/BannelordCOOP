@@ -21,7 +21,7 @@ namespace BannerCoopTW.Core.Battle
                 case SeatState.Free:
                     return to == SeatState.Reserved;
                 case SeatState.Reserved:
-                    return to == SeatState.Free || to == SeatState.Controlled; // cancel / expiry / disconnect, or confirm
+                    return to == SeatState.Free || to == SeatState.Controlled || to == SeatState.Down; // cancel / expiry / disconnect, confirm, or the agent died before confirm
                 case SeatState.Controlled:
                     return to == SeatState.Free || to == SeatState.Down;       // released (disconnect, leave) or killed/knocked out
                 default:

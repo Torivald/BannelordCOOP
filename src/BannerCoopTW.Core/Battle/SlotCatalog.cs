@@ -44,31 +44,44 @@ namespace BannerCoopTW.Core.Battle
     /// </summary>
     public sealed class SlotCatalog
     {
-        private readonly Dictionary<string, SlotDefinition> _byId;
-        private readonly List<SlotDefinition> _ordered;
+        // Copy-on-write: both fields point at objects that are never mutated after publication, so readers on other threads
+        // (UI, serialisation) always see a consistent catalog even while the session adds a slot.
+        private volatile State _state;
 
-        private SlotCatalog(List<SlotDefinition> ordered)
+        private sealed class State
         {
-            _ordered = ordered;
-            _byId = ordered.ToDictionary(s => s.Id, StringComparer.Ordinal);
+            public State(List<SlotDefinition> ordered)
+            {
+                Ordered = ordered;
+                ById = ordered.ToDictionary(s => s.Id, StringComparer.Ordinal);
+            }
+
+            public List<SlotDefinition> Ordered { get; }
+
+            public Dictionary<string, SlotDefinition> ById { get; }
         }
 
-        public IReadOnlyList<SlotDefinition> All => _ordered;
+        private SlotCatalog(List<SlotDefinition> ordered) => _state = new State(ordered);
 
-        public bool TryGet(string id, out SlotDefinition slot) => _byId.TryGetValue(id, out slot!);
+        /// <summary>Independent copy (sessions own their catalog).</summary>
+        public SlotCatalog Clone() => new SlotCatalog(new List<SlotDefinition>(_state.Ordered));
+
+        public IReadOnlyList<SlotDefinition> All => _state.Ordered;
+
+        public bool TryGet(string id, out SlotDefinition slot) => _state.ById.TryGetValue(id, out slot!);
 
         /// <summary>Slots of one side in presentation order.</summary>
-        public IEnumerable<SlotDefinition> ForSide(BattleSide side) => _ordered.Where(s => s.Side == side);
+        public IEnumerable<SlotDefinition> ForSide(BattleSide side) => _state.Ordered.Where(s => s.Side == side);
 
-        /// <summary>Adds a slot mid-battle (reinforcements). Not thread-safe by itself: only <see cref="BattleSession"/> calls it, under its lock.</summary>
+        /// <summary>Adds a slot mid-battle (reinforcements). Writers must be serialised by the caller (the session lock); readers need no lock.</summary>
         internal void Extend(SlotDefinition slot)
         {
-            if (_byId.ContainsKey(slot.Id))
+            var cur = _state;
+            if (cur.ById.ContainsKey(slot.Id))
                 throw new ArgumentException("Duplicate slot id: " + slot.Id, nameof(slot));
-            _byId[slot.Id] = slot;
-            var sorted = _ordered.Concat(new[] { slot }).OrderBy(s => (int)s.Kind).ThenBy(s => s.Order).ToList();
-            _ordered.Clear();
-            _ordered.AddRange(sorted);
+            // Stable order: kind, then Order, then insertion (a new slot goes after existing ones with an equal key).
+            var sorted = cur.Ordered.Concat(new[] { slot }).Select((x, i) => new { x, i }).OrderBy(t => (int)t.x.Kind).ThenBy(t => t.x.Order).ThenBy(t => t.i).Select(t => t.x).ToList();
+            _state = new State(sorted);
         }
 
         public static Builder Create() => new Builder();
