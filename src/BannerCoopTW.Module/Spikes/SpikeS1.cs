@@ -359,8 +359,13 @@ namespace BannerCoopTW.Spikes
         private static double _targetDays;
         private static Stopwatch? _advanceWatch;
         private static double _advanceStartDays;
+        private static Stopwatch? _waitWatch;
+        private static double _waitSeconds;
+        private static string _joinAddress = "";
+        private static bool _joinPending;
+        private static bool _readyWaitPending;
 
-        public static bool Busy => _active || Pending.Count > 0;
+        public static bool Busy => _active || _joinPending || _readyWaitPending || _waitWatch != null || Pending.Count > 0;
 
         public static void Enqueue(string script)
         {
@@ -391,6 +396,43 @@ namespace BannerCoopTW.Spikes
                 return;
             }
 
+            if (_waitWatch != null)
+            {
+                if (_waitWatch.Elapsed.TotalSeconds < _waitSeconds)
+                    return;
+                _waitWatch = null;
+            }
+
+            if (_readyWaitPending)
+            {
+                if (!SpikeS2.ClientReady)
+                {
+                    if (_advanceWatch != null && _advanceWatch.Elapsed.TotalSeconds < 240)
+                        return;
+                    SubModule.Log?.Info("s2_wait_ready: client never signalled (240 s)");
+                }
+
+                _readyWaitPending = false;
+                SubModule.Log?.Info("script s2_add_remote: " + SpikeS2.HostAddRemote());
+                return;
+            }
+
+            if (_joinPending)
+            {
+                if (!SpikeS2.HandshakeAvailable)
+                {
+                    if (_advanceWatch == null || _advanceWatch.Elapsed.TotalSeconds < 180)
+                        return;
+                    SubModule.Log?.Info("s2_join: handshake file never appeared (180 s)");
+                    _joinPending = false;
+                    return;
+                }
+
+                _joinPending = false;
+                SubModule.Log?.Info("script s2_join: " + SpikeS2.Join(_joinAddress));
+                return;
+            }
+
             if (Pending.Count == 0)
                 return;
 
@@ -408,6 +450,26 @@ namespace BannerCoopTW.Spikes
                 _advanceWatch = Stopwatch.StartNew();
                 _active = true;
                 result = $"advance_days {n} started at day {_advanceStartDays:F2}";
+            }
+            else if (parts[0] == "wait")
+            {
+                double w;
+                _waitSeconds = double.TryParse(arg, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out w) ? w : 1;
+                _waitWatch = Stopwatch.StartNew();
+                result = "waiting " + _waitSeconds + " s";
+            }
+            else if (parts[0] == "s2_wait_ready")
+            {
+                _readyWaitPending = true;
+                _advanceWatch = Stopwatch.StartNew();
+                result = "waiting for client ready";
+            }
+            else if (parts[0] == "s2_join")
+            {
+                _joinAddress = string.IsNullOrEmpty(arg) ? "127.0.0.1" : arg;
+                _joinPending = true;
+                _advanceWatch = Stopwatch.StartNew();
+                result = "waiting for handshake file";
             }
             else
             {
@@ -478,6 +540,12 @@ namespace BannerCoopTW.Spikes
             {
                 case "save_as": return Guard(() => SaveAsImpl(arg));
                 case "mutate": return Guard(Mutate);
+                case "s2_host_start": return Guard(SpikeS2.HostStart);
+                case "s2_ping": return Guard(() => SpikeS2.Ping(int.TryParse(arg, out var pv) ? pv : 1));
+                case "s2_ready": SpikeS2.SignalReady(); return "ready signalled";
+                case "s2_state": return Guard(SpikeS2.State);
+                case "s2_stop": return Guard(SpikeS2.Stop);
+                case "s2_clear": SpikeS2.ClearHandshake(); return "handshake cleared";
                 case "load_save": return Guard(() => SpikeS1.LoadSave(arg));
                 case "dump_guids": return Guard(SpikeS1.DumpGuids);
                 case "world_hash": return Guard(SpikeS1.WorldHash);

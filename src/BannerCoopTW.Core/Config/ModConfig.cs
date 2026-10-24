@@ -27,6 +27,11 @@ namespace BannerCoopTW.Core.Config
         /// <summary>Spike automation: comma-separated commands run once the campaign finished loading (e.g. <c>dump_guids,world_hash</c>).</summary>
         public string SpikeAutoRun { get; set; } = string.Empty;
 
+        /// <summary>Spike automation for two instances: script of the instance that wins the role election (host) / of the other one.</summary>
+        public string SpikeAutoRunHost { get; set; } = string.Empty;
+
+        public string SpikeAutoRunClient { get; set; } = string.Empty;
+
         public List<string> Problems { get; } = new List<string>();
 
         public static ModConfig Parse(string text)
@@ -80,6 +85,8 @@ namespace BannerCoopTW.Core.Config
             sb.Append("SpikesEnabled=").Append(SpikesEnabled ? "true" : "false").Append('\n');
             sb.Append("SpikeAutoLoadSave=").Append(SpikeAutoLoadSave).Append('\n');
             sb.Append("SpikeAutoRun=").Append(SpikeAutoRun).Append('\n');
+            sb.Append("SpikeAutoRunHost=").Append(SpikeAutoRunHost).Append('\n');
+            sb.Append("SpikeAutoRunClient=").Append(SpikeAutoRunClient).Append('\n');
             return sb.ToString();
         }
 
@@ -104,6 +111,12 @@ namespace BannerCoopTW.Core.Config
                     return true;
                 case "spikeautoloadsave":
                     SpikeAutoLoadSave = value;
+                    return true;
+                case "spikeautorunhost":
+                    SpikeAutoRunHost = value;
+                    return true;
+                case "spikeautorunclient":
+                    SpikeAutoRunClient = value;
                     return true;
                 case "spikeautorun":
                     SpikeAutoRun = value;

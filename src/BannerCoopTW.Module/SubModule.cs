@@ -98,10 +98,33 @@ namespace BannerCoopTW
             {
                 LoadTimer.Finish();
                 SpikeRunner.Enqueue(_config.SpikeAutoRun);
+                if (!string.IsNullOrEmpty(_config.SpikeAutoRunHost) || !string.IsNullOrEmpty(_config.SpikeAutoRunClient))
+                {
+                    var host = TryBecomeSpikeHost();
+                    _log?.Info("spike role: " + (host ? "host" : "client"));
+                    SpikeRunner.Enqueue(host ? _config.SpikeAutoRunHost : _config.SpikeAutoRunClient);
+                }
             }
             catch (Exception e)
             {
                 _log?.Error("spike auto-run failed", e);
+            }
+        }
+
+        private static System.IO.FileStream? _roleLock;
+
+        /// <summary>First instance to take an exclusive lock on the role file is the spike host; the lock is held until the process exits.</summary>
+        private static bool TryBecomeSpikeHost()
+        {
+            try
+            {
+                var path = System.IO.Path.Combine(SpikeS1.OutDir, "role-host.lock");
+                _roleLock = new System.IO.FileStream(path, System.IO.FileMode.OpenOrCreate, System.IO.FileAccess.ReadWrite, System.IO.FileShare.None);
+                return true;
+            }
+            catch (System.IO.IOException)
+            {
+                return false;
             }
         }
 
