@@ -15,9 +15,9 @@ jobs:
     # Compiles against BUTR Bannerlord.ReferenceAssemblies (NuGet) — no game files on CI.
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-dotnet@v4
+      - uses: actions/setup-dotnet@v6
         with:
           dotnet-version: 8.0.x
 
@@ -46,12 +46,12 @@ jobs:
           if (Select-String -Path (Join-Path $module 'SubModule.xml') -Pattern '\$\w+\$' -Quiet) { throw 'unreplaced placeholders in SubModule.xml' }
           "MODULE_DIR=$module" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: BannerCoopTW-module
           path: ${{ env.MODULE_DIR }}
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: test-results
