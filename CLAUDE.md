@@ -130,12 +130,30 @@ End: summarise changes, unresolved assumptions, tests actually run; update CURRE
 ## Model routing (local Claude Code)
 - Project default model is `opusplan` (`.claude/settings.json`): plan mode runs on Opus, execution on Sonnet.
   For any non-trivial task, start in plan mode (Shift+Tab), approve the plan, execution switches to Sonnet.
-- Delegate by subagent (`.claude/agents/`), each pinned to a model:
-  `bannerlord-researcher` (Sonnet) API lookups · `log-triage` (Haiku, local model first) logs/build output ·
-  `implementer` (Sonnet) specified coding · `architect-reviewer` (Opus) ADRs, hard debugging, milestone review.
-- At the start of a task, if the current main model is clearly mismatched (e.g. Opus outside plan mode
-  for routine edits, or Haiku/Sonnet for an architecture decision), say so in one line and suggest the
-  exact command (`/model sonnet`, `/model opusplan`, `/model opus`) before continuing.
+
+| Task | Where / model | Command |
+|---|---|---|
+| Routine edits, docs, small fixes, tests from a clear spec | Sonnet | `/model sonnet` (or execution phase of `opusplan`) |
+| Non-trivial feature: plan then implement | Opus plans → Sonnet executes | `/model opusplan` + Shift+Tab to plan mode |
+| Architecture, ADRs, sync/network/authority design, milestone review, hard multi-system debugging | Opus | `/model opus` or subagent `architect-reviewer` |
+| Still stuck after two Opus attempts, or a very long autonomous hard task | Fable (most expensive; only if the plan offers it) — **ask the user first** | `/model fable` |
+| API lookups in decompiled code | subagent `bannerlord-researcher` (Sonnet) | delegated automatically |
+| Logs, build/test output | local qwen first, then subagent `log-triage` (Haiku) | `python tools/local_llm.py "<task>" <log>` |
+| Bulk routine text (boilerplate, test scaffolds, XML, drafts, translations) | local qwen (skill `local-delegate`) | `python tools/local_llm.py --draft --out .local-llm/out/<file> "<spec>" <files>` |
+| Images: icons, banners, UI art, Workshop/Nexus thumbnails, loading screens, concept art | **local ComfyUI** (see below) | ComfyUI API, default `http://127.0.0.1:8188` |
+
+- **Announce routing at the start of every task**, in one block: the model to use (with the exact
+  `/model …` command if the current one is wrong), what goes to the local LLM / ComfyUI (with the exact
+  commands), and what stays with Claude. Repeat it when the task changes phase.
+- In the final summary list what was delegated (local LLM, ComfyUI, subagents) and `--stats`.
+
+## Local image generation (ComfyUI)
+- Any graphics need goes to the user's local ComfyUI, never to paid/cloud image services.
+- Use its HTTP API (`POST /prompt` with a workflow exported via "Save (API format)", poll `/history`,
+  download from `/view`). On the first graphics task, ask the user for the workflow JSON, model and port,
+  then add `tools/comfy_gen.py` (stdlib only, like `local_llm.py`) and outputs to `.local-llm/images/`.
+- If ComfyUI is not reachable, tell the user once and continue without images.
+- Generated art must be original: no real logos, brand marks or recognisable copyrighted characters.
 
 ## Token / context discipline (Claude Pro)
 

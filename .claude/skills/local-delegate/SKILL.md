@@ -61,3 +61,9 @@ python tools/local_llm.py --draft --task-file .local-llm/task.md --out .local-ll
 - If the draft is poor after one retry with a sharper spec, do the task yourself — do not loop.
 - In the final summary mention in one line what was delegated (e.g. "local: log triage,
   test scaffold") so the user sees the savings; `python tools/local_llm.py --stats` shows totals.
+
+## Images → local ComfyUI
+
+Graphics (mod icon, banners, Gauntlet UI art, Workshop/Nexus thumbnails, loading screens) go to the
+user's local ComfyUI, not to Claude and not to cloud services. See CLAUDE.md "Local image generation".
+Announce it in the task's routing block, e.g. "images: ComfyUI (tools/comfy_gen.py, workflow X)".
