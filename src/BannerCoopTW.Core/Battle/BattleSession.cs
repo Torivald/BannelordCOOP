@@ -199,6 +199,16 @@ namespace BannerCoopTW.Core.Battle
             }
         }
 
+        /// <summary>Id of the reservation the player currently holds (0 if none) - for the engine-side confirmation.</summary>
+        public long GetReservationId(PlayerId player)
+        {
+            lock (_gate)
+            {
+                Sync();
+                return _reservations.GetHeld(player)?.Id ?? 0;
+            }
+        }
+
         // ---------------------------------------------------------------- joining
 
         public SessionError Invite(PlayerId player)
