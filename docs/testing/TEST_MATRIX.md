@@ -17,7 +17,7 @@
 - [x] own log file written + mirrored to game log with `[BannerCoopTW]`
 - [x] config.ini created with defaults
 - [ ] "loaded" message visually confirmed in game (DisplayMessage called without error; message had faded before screenshot)
-- [ ] module loads in two instances at once
+- [x] module loads in two instances at once (25+ two-instance launches 2026-10-24/25)
 - [x] CI green on GitHub Actions (run 39134379296)
 
 ## Networking
