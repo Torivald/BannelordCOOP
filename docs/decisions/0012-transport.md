@@ -23,3 +23,12 @@ Players are behind home NATs; Steam is initialised by the game and ships Steamwo
 ## Consequences
 - Two backends to test; the abstraction keeps Core/Networking testable without Steam.
 - LiteNetLib license must be re-verified when added (CLAUDE.md dependency rule).
+
+## Amendment 2026-10-25 (Phase 4 start)
+- **LiteNetLib version pin: 1.3.5** (MIT, verified on NuGet: license expression `MIT`). It is the last 1.x release and still targets `netstandard2.0`;
+  2.x targets only `net8.0`/`netstandard2.1`, which the net472 game module cannot load. `BannerCoopTW.Networking` is therefore `netstandard2.0` on LiteNetLib 1.3.5.
+  Re-check when the module moves off .NET Framework.
+- The connection key is `bannercoop/<protocol version>`: peers with another protocol version are refused by LiteNetLib before any of our code runs.
+- `ITransport` is split into `IServerTransport` / `IClientTransport`; events are raised only from `Poll()` (main thread); a refused client is cut after a short
+  linger so the reliable `HelloReject` still reaches it.
+- Server glue: `BattleServerHost` maps wire messages to `BattleSession` calls. Identity currently comes from `Hello.PlayerId` (to be replaced by the authenticated connection).

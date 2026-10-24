@@ -130,3 +130,8 @@ Campaign sync, save sync, matchmaking, NAT traversal, production servers, optimi
   Details and known limitations: `docs/architecture/BATTLE_PARTICIPATION.md` ("Implementation status").
 - Tests actually run: 107 xUnit tests (net8.0), including 200-round concurrent claims, fuzz/mutation of frames, expiry with a moving clock. Not run on net472 / inside the game.
 - Reviewed by the architect-reviewer agent; critical findings (pinned initiator hero, AI losses, agent death before confirm, ControlReleased, lost expiry events, catalog thread-safety, epoch, cap, strict decoding) fixed in the same PR.
+
+## 2026-10-25 — Phase 4 start (branch `phase4/transport`, stacked on `phase3/core-allocation`)
+- `BannerCoopTW.Networking` (netstandard2.0): `ITransport` (reliable-ordered + unreliable, connection events, Poll-driven), LiteNetLib **1.3.5** backend (MIT; 2.x does not target netstandard2.0), `BattleServerHost` (wire messages -> `BattleSession`).
+- Integration tests (16, real UDP on localhost, no game): 4 fake clients join, simultaneous last-slot claim, disconnect during reservation/control, reservation expiry, stale epoch, protocol/build mismatch, player cap, engine-side confirm.
+  Run 4 times in a row without a failure. Not tested: Steam backend, NAT, large payloads, packet loss, real latency, inside the game.
