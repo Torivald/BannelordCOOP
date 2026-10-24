@@ -68,6 +68,18 @@ namespace BannerCoopTW
         protected override void OnApplicationTick(float dt)
         {
             base.OnApplicationTick(dt);
+            if (_config.SpikesEnabled && SpikeRunner.Busy)
+            {
+                try
+                {
+                    SpikeRunner.Tick();
+                }
+                catch (Exception e)
+                {
+                    _log?.Error("spike runner failed", e);
+                }
+            }
+
             if (_autoLoaded || _menuTime < 0f || !_config.SpikesEnabled || string.IsNullOrEmpty(_config.SpikeAutoLoadSave))
                 return;
             _menuTime += dt;
@@ -85,8 +97,7 @@ namespace BannerCoopTW
             try
             {
                 LoadTimer.Finish();
-                foreach (var cmd in _config.SpikeAutoRun.Split(new[] { ',' }, StringSplitOptions.RemoveEmptyEntries))
-                    _log?.Info("auto-run " + cmd.Trim() + ": " + SpikeCommands.Run(cmd));
+                SpikeRunner.Enqueue(_config.SpikeAutoRun);
             }
             catch (Exception e)
             {

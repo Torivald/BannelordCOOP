@@ -109,7 +109,25 @@ namespace BannerCoopTW.Spikes
             HashEconomy(c);
             var tC = sw.Elapsed.TotalMilliseconds;
 
+            // Same three levels as sorted content keyed by StringId only (no MBGUID, no enumeration order): isolates content from registration-order artefacts.
+            sw.Restart();
+            _sorted = true;
+            var a2 = new WorldHasher();
+            HashRegistry(a2, false);
+            var b2 = new WorldHasher();
+            HashRegistry(b2, false);
+            HashRosters(b2);
+            HashHeroEquipment(b2);
+            var c2 = new WorldHasher();
+            HashRegistry(c2, false);
+            HashRosters(c2);
+            HashHeroEquipment(c2);
+            HashEconomy(c2);
+            _sorted = false;
+            var tNoGuid = sw.Elapsed.TotalMilliseconds;
+
             sb.AppendLine($"world_hash pid={Pid} day={CampaignTime.Now.ToDays:F2}");
+            sb.AppendLine($"  A' content: {a2.ToHex()}  B' content: {b2.ToHex()}  C' content: {c2.ToHex()}  (all three {tNoGuid:F1} ms)");
             sb.AppendLine($"  A registry : {a.ToHex()}  items={a.Count}  {tA:F1} ms");
             sb.AppendLine($"  B +rosters : {b.ToHex()}  items={b.Count}  {tB:F1} ms");
             sb.AppendLine($"  C +economy : {c.ToHex()}  items={c.Count}  {tC:F1} ms");
@@ -119,8 +137,9 @@ namespace BannerCoopTW.Spikes
             return text;
         }
 
-        private static void HashRegistry(WorldHasher h)
+        private static void HashRegistry(WorldHasher h, bool withGuid = true)
         {
+            _withGuid = withGuid;
             Add(h, Hero.AllAliveHeroes);
             Add(h, Hero.DeadOrDisabledHeroes);
             Add(h, CharacterObject.All);
@@ -131,29 +150,43 @@ namespace BannerCoopTW.Spikes
             Add(h, Kingdom.All);
         }
 
+        [ThreadStatic]
+        private static bool _withGuid = true;
+
+        // Order-independent mode: every collection is visited sorted by StringId so live-vs-reloaded enumeration order cannot matter.
+        [ThreadStatic]
+        private static bool _sorted;
+
+        private static IEnumerable<T> Ordered<T>(IEnumerable<T> items, Func<T, string> key) =>
+            _sorted ? System.Linq.Enumerable.ToList(System.Linq.Enumerable.OrderBy(items, key, StringComparer.Ordinal)) : items;
+
         private static void Add<T>(WorldHasher h, IEnumerable<T> items) where T : MBObjectBase
         {
-            foreach (var o in items)
-                h.Add(o.StringId).Add(o.Id.InternalValue);
+            foreach (var o in Ordered(items, x => x.StringId))
+            {
+                h.Add(o.StringId);
+                if (_withGuid)
+                    h.Add(o.Id.InternalValue);
+            }
         }
 
         private static void HashRosters(WorldHasher h)
         {
-            foreach (var party in MobileParty.All)
+            foreach (var party in Ordered(MobileParty.All, x => x.StringId))
             {
                 h.Add(party.StringId);
                 var roster = party.MemberRoster;
+                var entries = new List<TroopRosterElement>();
                 for (var i = 0; i < roster.Count; i++)
-                {
-                    var e = roster.GetElementCopyAtIndex(i);
+                    entries.Add(roster.GetElementCopyAtIndex(i));
+                foreach (var e in Ordered(entries, x => x.Character.StringId))
                     h.Add(e.Character.StringId).Add(e.Number).Add(e.WoundedNumber);
-                }
             }
         }
 
         private static void HashHeroEquipment(WorldHasher h)
         {
-            foreach (var hero in Hero.AllAliveHeroes)
+            foreach (var hero in Ordered(Hero.AllAliveHeroes, x => x.StringId))
             {
                 h.Add(hero.StringId);
                 var eq = hero.BattleEquipment;
@@ -167,16 +200,16 @@ namespace BannerCoopTW.Spikes
 
         private static void HashEconomy(WorldHasher h)
         {
-            foreach (var hero in Hero.AllAliveHeroes)
+            foreach (var hero in Ordered(Hero.AllAliveHeroes, x => x.StringId))
                 h.Add(hero.StringId).Add(hero.Gold);
-            foreach (var party in MobileParty.All)
+            foreach (var party in Ordered(MobileParty.All, x => x.StringId))
             {
                 var inv = party.ItemRoster;
+                var entries = new List<ItemRosterElement>();
                 for (var i = 0; i < inv.Count; i++)
-                {
-                    var e = inv.GetElementCopyAtIndex(i);
+                    entries.Add(inv.GetElementCopyAtIndex(i));
+                foreach (var e in Ordered(entries, x => x.EquipmentElement.Item?.StringId ?? ""))
                     h.Add(e.EquipmentElement.Item?.StringId).Add(e.Amount);
-                }
             }
         }
 
@@ -314,6 +347,77 @@ namespace BannerCoopTW.Spikes
         }
     }
 
+
+    /// <summary>
+    /// Sequential spike script (SpikeAutoRun): items are <c>cmd</c> or <c>cmd:arg</c>. <c>advance_days:N</c> fast-forwards the campaign
+    /// N days (aborts after a wall-clock timeout or if time control is taken away) before the next item runs.
+    /// </summary>
+    public static class SpikeRunner
+    {
+        private static readonly Queue<string> Pending = new Queue<string>();
+        private static bool _active;
+        private static double _targetDays;
+        private static Stopwatch? _advanceWatch;
+        private static double _advanceStartDays;
+
+        public static bool Busy => _active || Pending.Count > 0;
+
+        public static void Enqueue(string script)
+        {
+            foreach (var item in script.Split(new[] { ',' }, StringSplitOptions.RemoveEmptyEntries))
+                Pending.Enqueue(item.Trim());
+        }
+
+        public static void Tick()
+        {
+            if (Campaign.Current == null || Game.Current == null)
+                return;
+
+            if (_active)
+            {
+                var days = CampaignTime.Now.ToDays;
+                var timedOut = _advanceWatch!.Elapsed.TotalSeconds > 300;
+                if (days >= _targetDays || timedOut)
+                {
+                    Campaign.Current.TimeControlMode = CampaignTimeControlMode.Stop;
+                    _active = false;
+                    SubModule.Log?.Info($"advance_days done: {days - _advanceStartDays:F2} days in {_advanceWatch.Elapsed.TotalSeconds:F1} s timedOut={timedOut}");
+                }
+                else
+                {
+                    Campaign.Current.TimeControlMode = CampaignTimeControlMode.UnstoppableFastForward;
+                }
+
+                return;
+            }
+
+            if (Pending.Count == 0)
+                return;
+
+            var item = Pending.Dequeue();
+            var parts = item.Split(new[] { ':' }, 2);
+            var arg = parts.Length > 1 ? parts[1] : string.Empty;
+            string result;
+            if (parts[0] == "advance_days")
+            {
+                double n;
+                if (!double.TryParse(arg, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out n))
+                    n = 1;
+                _advanceStartDays = CampaignTime.Now.ToDays;
+                _targetDays = _advanceStartDays + n;
+                _advanceWatch = Stopwatch.StartNew();
+                _active = true;
+                result = $"advance_days {n} started at day {_advanceStartDays:F2}";
+            }
+            else
+            {
+                result = SpikeCommands.Run(parts[0], arg);
+            }
+
+            SubModule.Log?.Info("script " + item + ": " + result);
+        }
+    }
+
     public static class SpikeCommands
     {
         [CommandLineFunctionality.CommandLineArgumentFunction("dump_guids", "coop")]
@@ -330,10 +434,51 @@ namespace BannerCoopTW.Spikes
         public static string LoadSave(List<string> args) =>
             args.Count == 0 ? "usage: coop.load_save <saveName>" : Guard(() => SpikeS1.LoadSave(args[0]));
 
-        public static string Run(string name)
+        [CommandLineFunctionality.CommandLineArgumentFunction("advance_days", "coop")]
+        public static string AdvanceDays(List<string> args)
+        {
+            if (!SubModule.SpikesEnabled)
+                return "spikes disabled";
+            SpikeRunner.Enqueue("advance_days:" + (args.Count > 0 ? args[0] : "1"));
+            return "queued";
+        }
+
+        [CommandLineFunctionality.CommandLineArgumentFunction("save_as", "coop")]
+        public static string SaveAs(List<string> args) =>
+            args.Count == 0 ? "usage: coop.save_as <name>" : Guard(() => SaveAsImpl(args[0]));
+
+        private static string SaveAsImpl(string name)
+        {
+            // SaveHandler.SaveAs only queues the save for the campaign tick, which did not run it in the first spike attempt;
+            // call the engine entry point directly with the campaign's own metadata.
+            var args = Campaign.Current.SaveHandler.GetSaveMetaData();
+            var sw = Stopwatch.StartNew();
+            MBSaveLoad.SaveAsCurrentGame(args, name, r => SubModule.Log?.Info($"save_as '{name}' completed: {r.Item1} in {sw.ElapsedMilliseconds} ms"));
+            return "save_as " + name + " started";
+        }
+
+        [CommandLineFunctionality.CommandLineArgumentFunction("mutate", "coop")]
+        public static string MutateCmd(List<string> args) => Guard(Mutate);
+
+        /// <summary>Deterministic divergence for scenario (ii): +gold, +5 troops of the first party stack, +1 wounded-free recruit.</summary>
+        public static string Mutate()
+        {
+            var party = MobileParty.MainParty;
+            var before = party.MemberRoster.TotalManCount;
+            Hero.MainHero.ChangeHeroGold(1234);
+            var roster = party.MemberRoster;
+            var troop = roster.GetCharacterAtIndex(roster.Count - 1);
+            roster.AddToCounts(troop, 5);
+            return $"mutate: gold+1234, +5 x {troop.StringId}, men {before}->{party.MemberRoster.TotalManCount}";
+        }
+
+        public static string Run(string name, string arg = "")
         {
             switch (name.Trim())
             {
+                case "save_as": return Guard(() => SaveAsImpl(arg));
+                case "mutate": return Guard(Mutate);
+                case "load_save": return Guard(() => SpikeS1.LoadSave(arg));
                 case "dump_guids": return Guard(SpikeS1.DumpGuids);
                 case "world_hash": return Guard(SpikeS1.WorldHash);
                 case "save_timing": return Guard(() => SpikeS1.SaveTiming());
