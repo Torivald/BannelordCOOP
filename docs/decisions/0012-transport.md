@@ -32,3 +32,10 @@ Players are behind home NATs; Steam is initialised by the game and ships Steamwo
 - `ITransport` is split into `IServerTransport` / `IClientTransport`; events are raised only from `Poll()` (main thread); a refused client is cut after a short
   linger so the reliable `HelloReject` still reaches it.
 - Server glue: `BattleServerHost` maps wire messages to `BattleSession` calls. Identity currently comes from `Hello.PlayerId` (to be replaced by the authenticated connection).
+
+## Amendment 2026-10-25 (Phase 4 close, research 0014)
+- **Channels:** three delivery modes: `ReliableOrdered` (events, commands, lobby), `Unreliable` (ping/pong) and `UnreliableSequenced` (state snapshots; LiteNetLib `Sequenced`). A snapshot stream also carries a payload sequence number and the receiver runs a `SequenceGate`, so "no older state after a newer one" holds on any backend and behind the test decorator.
+- **Protocol v2:** `Hello` carries `ModVersion`; `HelloAck.Resumed`; new `ReadyRequest`, `LobbyUpdate`, `Ping`, `Pong`. Version bumped to 2 (both ends must match; the host answers a mismatch with `HelloReject`).
+- **Lobby before battle:** `BattleServerHost` starts as a lobby (connect, ready, ping, disconnect with a grace period, reconnect stub by player id) and opens a battle with `StartBattle`. A reconnect inside the grace period returns the player to `Invited` (`BattleSession.Rejoin`); the seat was freed when they left.
+- **Test decorator:** `NetworkConditionTransport` stays as a test-only decorator (loss, latency, sequenced-stale drop); LiteNetLib's own `Simulate*` switches do not work in the referenced build (research 0013).
+- **Client library:** `CoopClient` (no game dependency) is used by the fake clients and by the game spike.

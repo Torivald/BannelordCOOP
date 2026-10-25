@@ -22,8 +22,15 @@ namespace BannerCoopTW.Networking
         /// <summary>Delivered, in order (commands, reservations, save chunks).</summary>
         ReliableOrdered = 0,
 
-        /// <summary>May be lost or reordered (state samples).</summary>
+        /// <summary>May be lost or reordered (pings, anything where a late copy is still useful).</summary>
         Unreliable = 1,
+
+        /// <summary>
+        /// May be lost, never duplicated and never delivered after a newer packet of the same kind (state snapshots): a late packet is dropped by the transport.
+        /// Receivers should still carry a sequence number in the payload (<see cref="BannerCoopTW.Core.Protocol.SequenceGate"/>) so the rule also holds
+        /// across backends and test decorators.
+        /// </summary>
+        UnreliableSequenced = 2,
     }
 
     public enum DisconnectReason : byte

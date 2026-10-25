@@ -12,7 +12,7 @@ namespace BannerCoopTW.Core.Protocol
         public const byte Magic = 0xBC;
 
         /// <summary>Current protocol version. Bump on any incompatible change; peers must be equal in version 1 (no negotiation yet).</summary>
-        public const ushort Version = 1;
+        public const ushort Version = 2;
 
         public const int HeaderSize = 8;
 
@@ -35,6 +35,10 @@ namespace BannerCoopTW.Core.Protocol
         SlotsChanged = 18,
         PlayerPhaseChanged = 19,
         BattleEnded = 20,
+        ReadyRequest = 30,
+        LobbyUpdate = 31,
+        Ping = 32,
+        Pong = 33,
     }
 
     public enum RejectReason : byte
@@ -91,6 +95,9 @@ namespace BannerCoopTW.Core.Protocol
 
         public string GameBuild { get; set; } = "";
 
+        /// <summary>Version of our mod (exact match required by the host unless it is configured otherwise).</summary>
+        public string ModVersion { get; set; } = "";
+
         /// <summary>"ModuleId@version" entries.</summary>
         public List<string> Modules { get; set; } = new List<string>();
 
@@ -102,6 +109,7 @@ namespace BannerCoopTW.Core.Protocol
             w.Write(PlayerId);
             WireText.Write(w, PlayerName);
             WireText.Write(w, GameBuild);
+            WireText.Write(w, ModVersion);
             WireText.WriteList(w, Modules);
         }
 
@@ -111,6 +119,7 @@ namespace BannerCoopTW.Core.Protocol
             PlayerId = r.ReadUInt64(),
             PlayerName = WireText.Read(r),
             GameBuild = WireText.Read(r),
+            ModVersion = WireText.Read(r),
             Modules = WireText.ReadList(r),
         };
     }
@@ -121,15 +130,19 @@ namespace BannerCoopTW.Core.Protocol
 
         public string SessionId { get; set; } = "";
 
+        /// <summary>True when the host recognised the player id as a recent disconnect and let it back in (reconnect stub: same id within the grace period).</summary>
+        public bool Resumed { get; set; }
+
         public override MessageType Type => MessageType.HelloAck;
 
         internal override void Write(BinaryWriter w)
         {
             w.Write(ProtocolVersion);
             WireText.Write(w, SessionId);
+            w.Write(Resumed);
         }
 
-        internal static HelloAck Read(BinaryReader r) => new HelloAck { ProtocolVersion = r.ReadUInt16(), SessionId = WireText.Read(r) };
+        internal static HelloAck Read(BinaryReader r) => new HelloAck { ProtocolVersion = r.ReadUInt16(), SessionId = WireText.Read(r), Resumed = WireRead.Bool(r) };
     }
 
     public sealed class HelloReject : Message
@@ -363,6 +376,114 @@ namespace BannerCoopTW.Core.Protocol
         internal override void Write(BinaryWriter w) => WireText.Write(w, BattleId);
 
         internal static BattleEnded Read(BinaryReader r) => new BattleEnded { BattleId = WireText.Read(r) };
+    }
+
+    /// <summary>A lobby member as the host sees it (broadcast in <see cref="LobbyUpdate"/>).</summary>
+    public sealed class LobbyPlayer
+    {
+        public ulong PlayerId { get; set; }
+
+        public string Name { get; set; } = "";
+
+        public bool Ready { get; set; }
+
+        /// <summary>False during the reconnect grace period.</summary>
+        public bool Connected { get; set; }
+
+        /// <summary>Last round trip time the player reported to the host, -1 = none yet.</summary>
+        public int RttMs { get; set; } = -1;
+    }
+
+    /// <summary>Client: "I am ready" / "not ready" in the lobby.</summary>
+    public sealed class ReadyRequest : Message
+    {
+        public bool Ready { get; set; }
+
+        public override MessageType Type => MessageType.ReadyRequest;
+
+        internal override void Write(BinaryWriter w) => w.Write(Ready);
+
+        internal static ReadyRequest Read(BinaryReader r) => new ReadyRequest { Ready = WireRead.Bool(r) };
+    }
+
+    /// <summary>Host to all: the whole lobby, replaced as a unit; the revision grows with every change.</summary>
+    public sealed class LobbyUpdate : Message
+    {
+        public uint Revision { get; set; }
+
+        public List<LobbyPlayer> Players { get; set; } = new List<LobbyPlayer>();
+
+        public override MessageType Type => MessageType.LobbyUpdate;
+
+        internal override void Write(BinaryWriter w)
+        {
+            w.Write(Revision);
+            if (Players.Count > 64)
+                throw new ArgumentException("Too many lobby players for the wire.");
+            w.Write((ushort)Players.Count);
+            foreach (var p in Players)
+            {
+                w.Write(p.PlayerId);
+                WireText.Write(w, p.Name);
+                w.Write(p.Ready);
+                w.Write(p.Connected);
+                w.Write(p.RttMs);
+            }
+        }
+
+        internal static LobbyUpdate Read(BinaryReader r)
+        {
+            var m = new LobbyUpdate { Revision = r.ReadUInt32() };
+            int n = r.ReadUInt16();
+            if (n > 64)
+                throw new FormatException("Too many lobby players: " + n);
+            for (var i = 0; i < n; i++)
+                m.Players.Add(new LobbyPlayer { PlayerId = r.ReadUInt64(), Name = WireText.Read(r), Ready = WireRead.Bool(r), Connected = WireRead.Bool(r), RttMs = r.ReadInt32() });
+            return m;
+        }
+    }
+
+    /// <summary>Client: measures the round trip; carries the previous result so the host can show it to everyone.</summary>
+    public sealed class Ping : Message
+    {
+        public uint Seq { get; set; }
+
+        /// <summary>Client clock when sent; echoed back unchanged.</summary>
+        public long ClientTimeMs { get; set; }
+
+        /// <summary>RTT the client measured from the previous pong, -1 = none.</summary>
+        public int LastRttMs { get; set; } = -1;
+
+        public override MessageType Type => MessageType.Ping;
+
+        internal override void Write(BinaryWriter w)
+        {
+            w.Write(Seq);
+            w.Write(ClientTimeMs);
+            w.Write(LastRttMs);
+        }
+
+        internal static Ping Read(BinaryReader r) => new Ping { Seq = r.ReadUInt32(), ClientTimeMs = r.ReadInt64(), LastRttMs = r.ReadInt32() };
+    }
+
+    public sealed class Pong : Message
+    {
+        public uint Seq { get; set; }
+
+        public long ClientTimeMs { get; set; }
+
+        public long ServerTimeMs { get; set; }
+
+        public override MessageType Type => MessageType.Pong;
+
+        internal override void Write(BinaryWriter w)
+        {
+            w.Write(Seq);
+            w.Write(ClientTimeMs);
+            w.Write(ServerTimeMs);
+        }
+
+        internal static Pong Read(BinaryReader r) => new Pong { Seq = r.ReadUInt32(), ClientTimeMs = r.ReadInt64(), ServerTimeMs = r.ReadInt64() };
     }
 
     internal static class WireRead

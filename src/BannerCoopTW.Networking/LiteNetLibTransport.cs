@@ -40,7 +40,7 @@ namespace BannerCoopTW.Networking
             {
                 var data = reader.GetRemainingBytes();
                 reader.Recycle();
-                DataReceived?.Invoke(new ConnectionId(peer.Id), data, method == DeliveryMethod.Unreliable ? DeliveryMode.Unreliable : DeliveryMode.ReliableOrdered);
+                DataReceived?.Invoke(new ConnectionId(peer.Id), data, FromMethod(method));
             };
         }
 
@@ -54,6 +54,26 @@ namespace BannerCoopTW.Networking
 
         protected NetManager Manager { get; }
 
+        private static DeliveryMethod ToMethod(DeliveryMode mode)
+        {
+            switch (mode)
+            {
+                case DeliveryMode.Unreliable: return DeliveryMethod.Unreliable;
+                case DeliveryMode.UnreliableSequenced: return DeliveryMethod.Sequenced;
+                default: return DeliveryMethod.ReliableOrdered;
+            }
+        }
+
+        private static DeliveryMode FromMethod(DeliveryMethod method)
+        {
+            switch (method)
+            {
+                case DeliveryMethod.Unreliable: return DeliveryMode.Unreliable;
+                case DeliveryMethod.Sequenced: return DeliveryMode.UnreliableSequenced;
+                default: return DeliveryMode.ReliableOrdered;
+            }
+        }
+
         public int LocalPort => Manager.LocalPort;
 
         public void Send(ConnectionId connection, byte[] data, DeliveryMode mode)
@@ -63,7 +83,7 @@ namespace BannerCoopTW.Networking
                 _peers.TryGetValue(connection.Value, out peer);
             if (peer == null || peer.ConnectionState != ConnectionState.Connected)
                 return; // the peer is gone; callers learn it from Disconnected
-            peer.Send(data, mode == DeliveryMode.Unreliable ? DeliveryMethod.Unreliable : DeliveryMethod.ReliableOrdered);
+            peer.Send(data, ToMethod(mode));
         }
 
         public void Disconnect(ConnectionId connection)

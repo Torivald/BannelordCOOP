@@ -12,8 +12,8 @@ namespace BannerCoopTW.Core.Tests
 
         public static IEnumerable<object[]> AllMessages()
         {
-            yield return new object[] { new Hello { PlayerId = 76561198000000001UL, PlayerName = "Игрок", GameBuild = "1.4.8.119303", Modules = new List<string> { "Native@1.4.8", "BannerCoopTW@0.1.0" } } };
-            yield return new object[] { new HelloAck { SessionId = "s-1" } };
+            yield return new object[] { new Hello { PlayerId = 76561198000000001UL, PlayerName = "Игрок", GameBuild = "1.4.8.119303", ModVersion = "0.1.0", Modules = new List<string> { "Native@1.4.8", "BannerCoopTW@0.1.0" } } };
+            yield return new object[] { new HelloAck { SessionId = "s-1", Resumed = true } };
             yield return new object[] { new HelloReject { Reason = RejectReason.ModuleMismatch, Detail = "x" } };
             yield return new object[] { new BattleInvite { BattleId = "b1", Epoch = 9, InitiatorSide = BattleSide.Defender, AllowPvp = true } };
             yield return new object[] { new ChooseSide { Epoch = 9, Spectate = true, Side = BattleSide.Defender } };
@@ -26,6 +26,10 @@ namespace BannerCoopTW.Core.Tests
             yield return new object[] { new SlotsChanged { Revision = 8, Slots = new List<SlotInfo> { Slot } } };
             yield return new object[] { new PlayerPhaseChanged { Revision = 9, PlayerId = 3, Phase = PlayerPhase.Controlling, SlotId = "a-off" } };
             yield return new object[] { new BattleEnded { BattleId = "b1" } };
+            yield return new object[] { new ReadyRequest { Ready = true } };
+            yield return new object[] { new LobbyUpdate { Revision = 4, Players = new List<LobbyPlayer> { new LobbyPlayer { PlayerId = 7, Name = "Игрок", Ready = true, Connected = false, RttMs = 42 }, new LobbyPlayer { PlayerId = 8, Name = "b" } } } };
+            yield return new object[] { new Ping { Seq = 5, ClientTimeMs = 1L << 40, LastRttMs = 31 } };
+            yield return new object[] { new Pong { Seq = 5, ClientTimeMs = 1L << 40, ServerTimeMs = 1L << 41 } };
         }
 
         [Fact]

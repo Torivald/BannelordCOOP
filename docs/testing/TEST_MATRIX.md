@@ -24,8 +24,20 @@
 
 - [x] client connects — fake clients over LiteNetLib UDP on localhost (no game)
 - [x] disconnect detected — server notices a killed client and frees the seat (no game)
-- [ ] session created
-- [ ] one entity synchronized
+- [x] lobby session created — host lobby accepts Hello (protocol + game build + mod version), `LobbyTests`/`LobbyScenarioTests` (no game); in game: research 0014 (L1)
+- [ ] one entity synchronized (campaign entity; battle agents were mirrored in Spike A1, research 0012/0013)
+- [x] protocol / game build / mod version mismatch refused with the reason — `LobbyTests`, `SlotReservationOverWireTests`
+- [x] lobby full → refused; duplicate id while connected → refused — `LobbyTests`
+- [x] ready flags shared, `AllReady` — `LobbyTests`
+- [x] ping / RTT measured by the client and shown to everyone by the host — `LobbyTests`, scenario (RTT >= 150 ms behind the 100 ms decorator)
+- [x] disconnect keeps the lobby place for the grace period, then frees it — `LobbyTests`
+- [x] reconnect with the same id inside the grace period is `Resumed` (stub: back at Invited, seat already freed); after the grace the id comes back as a new player, also while a battle is open (`Rejoin`) — `LobbyTests`, `LobbyRegressionTests`, `RejoinTests`
+- [x] unreliable-sequenced channel: mode preserved over LiteNetLib; never delivers an older snapshot after a newer one; loss applies; `SequenceGate` drops late ones — `TransportChannelTests`, `SequenceGateTests`
+- [x] 4 fake clients: lobby → ready → battle created → side → slot race → reservation timeout → disconnect frees seat → reconnect → no slot → spectator → battle end — `LobbyScenarioTests`, clean link and behind 5 % loss + 100 ms each way (no game)
+- [x] two game instances: connect / ready / ping (host sees the client ready with RTT, client sees 24+ pongs) — Spike L1, `tools/dev/run-l1.sh`, 2026-10-25, 60 fps cap, StopGameOnFocusLost off
+- [x] review regressions: host works again after `EndBattle`; grace players are not invited and hold no place; a refused peer cannot slip in; a client that does not fit is refused and cut — `LobbyRegressionTests`
+- [ ] real network / second PC — not available
+- [ ] identity / RTT / name / rate-limit hardening (M3) — before Steam or public use
 - [x] claim accepted — integration, fake clients (no game)
 - [x] conflicting claim rejected — integration, simultaneous last-slot claim (no game)
 - [x] release works — integration, fake clients (no game)

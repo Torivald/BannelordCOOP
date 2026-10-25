@@ -162,3 +162,10 @@ Campaign sync, save sync, matchmaking, NAT traversal, production servers, optimi
 - Corrections: earlier "n100" runs were 100 vs 1 (fixed); the game pauses on focus loss (`StopGameOnFocusLost`, host must keep it off); two windows on one PC need both capped (60 fps) or the second one starves; LiteNetLib `Simulate*` is a no-op in the referenced build → `NetworkConditionTransport` (4 tests).
 - Tests actually run: `dotnet test` Core 111, Networking 20 — all pass; game runs as in 0013. Not done: second PC, real network.
 - Next: Phase 5/6 toward a working multiplayer (owner priority); sieges after it. G3 conditions listed in 0013 "Review".
+
+## 2026-10-25 — Phase 4 done: network stand (branch `phase4/lobby-stand`, research 0014)
+- Transport: `ReliableOrdered` / `Unreliable` / `UnreliableSequenced` (LiteNetLib Sequenced); `SequenceGate` on the receiver (closes the G3 condition "out-of-order snapshots"; A1 snapshots now travel sequenced, one number per chunk). `NetworkConditionTransport` kept as a test decorator.
+- Protocol v2; lobby on the host (`BattleServerHost` lobby mode, `StartBattle`), `CoopClient` client library, `BattleSession.Rejoin` for the reconnect stub.
+- Tests actually run: Core 122, Networking 43 (incl. the 4-fake-client scenario on a clean link and behind 5 % loss + 100 ms each way and the review regressions; 3 repeated runs green on the final tree). Reviewed by architect-reviewer: PASS WITH CONDITIONS, H1–M2 fixed, M3/L1–L3 are recorded limits (research 0014). Game: Spike L1, two instances connect / ready / ping (host sees the client ready, RTT 17–33 ms; client 24+ pongs); A1 smoke after the Sequenced switch (170 s, no errors, 0 stale chunks on loopback).
+- Not done: a campaign entity synchronised between two games (Phase 5), real network / second PC, Steam backend.
+- Next: Phase 5 (shared campaign foundation) toward a working multiplayer; A1 G3 conditions in research 0013 (alive-set reconciliation, ~100 agents for 10 min, uncapped client, controlled-agent knock-out) still open.

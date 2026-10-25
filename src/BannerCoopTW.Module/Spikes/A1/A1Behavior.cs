@@ -37,7 +37,8 @@ namespace BannerCoopTW.Spikes.A1
         private float _runningTime;
         private float _sinceSend;
         private float _sinceHello;
-        private int _snapshotSeq;
+        private readonly BannerCoopTW.Core.Protocol.SequenceCounter _snapshotSeq = new BannerCoopTW.Core.Protocol.SequenceCounter();
+        private readonly BannerCoopTW.Core.Protocol.SequenceGate _snapshotGate = new BannerCoopTW.Core.Protocol.SequenceGate();
 
         // translation table (client): host agent index -> local agent; host: the agents it announced
         private readonly Dictionary<int, Agent> _table = new Dictionary<int, Agent>();
@@ -491,7 +492,6 @@ namespace BannerCoopTW.Spikes.A1
             foreach (var a in Mission.Agents)
                 if (a.IsHuman && a.Team != null && a.IsActive())
                     agents.Add(a);
-            ++_snapshotSeq;
             for (var start = 0; start < agents.Count; start += AgentsPerChunk)
             {
                 var n = Math.Min(AgentsPerChunk, agents.Count - start);
@@ -499,7 +499,7 @@ namespace BannerCoopTW.Spikes.A1
                 using (var w = new BinaryWriter(ms))
                 {
                     w.Write(MsgSnapshot);
-                    w.Write(_snapshotSeq);
+                    w.Write(_snapshotSeq.Next()); // one number per chunk: a late chunk is dropped by the receiver's SequenceGate
                     w.Write(_inSeq);
                     w.Write((ushort)n);
                     for (var k = 0; k < n; k++)
@@ -520,7 +520,7 @@ namespace BannerCoopTW.Spikes.A1
                     }
 
                     Trace("snapshot chunk built, agents=" + n + ", bytes=" + ms.Length);
-                    Send(ms.ToArray(), _mode.Contains("reliable") ? DeliveryMode.ReliableOrdered : DeliveryMode.Unreliable);
+                    Send(ms.ToArray(), _mode.Contains("reliable") ? DeliveryMode.ReliableOrdered : DeliveryMode.UnreliableSequenced);
                 }
             }
         }
@@ -729,9 +729,11 @@ namespace BannerCoopTW.Spikes.A1
 
         private void ApplySnapshotCore(BinaryReader r)
         {
-            r.ReadInt32(); // snapshot seq
+            var seq = r.ReadUInt32();
             var ack = r.ReadInt32();
             var count = r.ReadUInt16();
+            if (!_snapshotGate.Accept(seq))
+                return; // an older snapshot chunk that overtook a newer one (G3 condition: out-of-order snapshots)
             var now = NowMs;
             if (ack > _lastAckSeq && _inputSentAt.TryGetValue(ack, out var sentAt))
             {
