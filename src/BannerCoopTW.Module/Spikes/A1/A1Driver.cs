@@ -40,6 +40,9 @@ namespace BannerCoopTW.Spikes.A1
                     if (menuTime < 10f)
                         return;
                     _isHost = electHost();
+                    // The stock option (default on) stops the game when its window loses focus: with two windows on one PC the host froze
+                    // for minutes (research 0013). A co-op host must keep running unfocused. Static field only, not saved to the config file.
+                    BannerlordConfig.StopGameOnFocusLost = false;
                     SubModule.Log?.Info("A1: role " + (_isHost ? "host" : "client") + "; starting Custom Battle game");
                     MBGameManager.StartNewGame(new CustomGameManager());
                     Advance(Step.GameRequested);
@@ -98,7 +101,9 @@ namespace BannerCoopTW.Spikes.A1
                 army = int.Parse(m.Groups[1].Value);
             var composition = new CustomBattleCompositionData(0.3f, 0f, 0f);
             var counts = CustomBattleHelper.GetTroopCounts(army, composition);
-            var parties = CustomBattleHelper.GetCustomBattleParties(chars[0], null, chars[1], cultureA, counts, null, cultureB, counts, null, true);
+            var enemyCounts = CustomBattleHelper.GetTroopCounts(army, composition);
+            SubModule.Log?.Info("A1: troop counts player=[" + string.Join(",", counts) + "] enemy=[" + string.Join(",", enemyCounts) + "]");
+            var parties = CustomBattleHelper.GetCustomBattleParties(chars[0], null, chars[1], cultureA, counts, null, cultureB, enemyCounts, null, true);
             CustomBattleData data;
             if (Mode.Contains("siege"))
             {
