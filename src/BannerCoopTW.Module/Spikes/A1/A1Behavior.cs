@@ -21,7 +21,7 @@ namespace BannerCoopTW.Spikes.A1
     public sealed partial class A1Behavior : MissionBehavior
     {
         public const int Port = 9998;
-        private const byte MsgHello = 1, MsgTable = 2, MsgTableAck = 3, MsgGo = 4, MsgSnapshot = 5, MsgInput = 6, MsgHit = 7, MsgDeath = 8;
+        private const byte MsgHello = 1, MsgTable = 2, MsgTableAck = 3, MsgGo = 4, MsgSnapshot = 5, MsgInput = 6, MsgHit = 7, MsgDeath = 8, MsgStats = 10;
         private const float SnapshotInterval = 1f / 20f;
         private const float InputInterval = 1f / 30f;
 
@@ -60,10 +60,6 @@ namespace BannerCoopTW.Spikes.A1
         private int _inputSeq;
         private readonly Dictionary<int, long> _inputSentAt = new Dictionary<int, long>();
         private int _lastAckSeq;
-        private long _forwardStartedAt = -1;
-        private bool _forwardObserved;
-        private Vec3 _lastControlledPos;
-        private long _lastControlledPosAt;
 
         // host: last input applied
         private uint _inFlags;
@@ -115,8 +111,8 @@ namespace BannerCoopTW.Spikes.A1
             var tickStart = _wall.Elapsed.TotalMilliseconds;
             try
             {
-                if (_mode.Contains("nodie"))
-                    Mission.DisableDying = true;
+                if (_mode.Contains("nodie") || (!_host && _running && !_mode.Contains("localdmg")))
+                    Mission.DisableDying = true; // client: damage only comes from the host (A1b), local blows are counted in OnRegisterBlow
                 if (_mode.Contains("solo"))
                 {
                     SoloTick(dt);
@@ -125,7 +121,9 @@ namespace BannerCoopTW.Spikes.A1
 
                 if (!_initialised)
                     Initialise();
+                var pollStart = _wall.Elapsed.TotalMilliseconds;
                 (_server as ITransport ?? _client)?.Poll();
+                NotePoll(_wall.Elapsed.TotalMilliseconds - pollStart);
                 Window(dt);
                 if (_host)
                     HostTick(dt);
@@ -152,6 +150,7 @@ namespace BannerCoopTW.Spikes.A1
             if (_host)
             {
                 var server = new LiteNetLibServerTransport();
+                ApplyNetEmulation(server.SimulateNetwork);
                 server.Listen(Port);
                 server.Connected += c => { _peer = c; _linked = true; Log("host: client connected " + c); };
                 server.Disconnected += (c, r) => { _linked = false; Log("host: client disconnected " + r); };
@@ -166,6 +165,7 @@ namespace BannerCoopTW.Spikes.A1
                 client.DataReceived += (c, data, mode) => OnClientData(data);
                 client.Connect("127.0.0.1", Port);
                 _client = client;
+                ApplyNetEmulation(client.SimulateNetwork);
             }
         }
 
@@ -203,6 +203,8 @@ namespace BannerCoopTW.Spikes.A1
                 RequestFinish(() => Log("solo: FinishDeployment returned"));
             }
 
+            if (_soloCharged)
+                BrawlTick(dt, true);
             if (_soloDone && !_soloCharged && _soloTime > 14f && Mission.PlayerTeam != null)
             {
                 _soloCharged = true;
@@ -232,6 +234,8 @@ namespace BannerCoopTW.Spikes.A1
             _lastFrameWall = now;
             if (frameWall > _winMaxDt)
                 _winMaxDt = (float)frameWall;
+            if (frameWall > 0.2)
+                StallLog(frameWall);
             _winFrames++;
             if (_running)
                 _runningTime += dt;
@@ -262,6 +266,7 @@ namespace BannerCoopTW.Spikes.A1
             var applyAvg = _applyCalls > 0 ? _applyMs / _applyCalls : 0.0;
             Log($"{phase}: apply={applyAvg:F2}ms/chunk x{_applyCalls} own={ownAvg:F2}ms/frame(max {_tickMsMax:F1}) moving={movingAgents} siege={_siegeSent}/{_siegeApplied}/{_siegeDiverged}/{_siegeUses} fps={fps:F1} maxDt={_winMaxDt * 1000f:F1}ms agents={Mission.Agents.Count} tx={_txBytes / 1024.0 / _winTime:F1}KB/s rx={_rxBytes / 1024.0 / _winTime:F1}KB/s " +
                 $"snap={_snapshotsApplied} hits={_hitsSent + _hitsApplied} deaths={_deathsSent + _deathsApplied} ack p50/p95/max={lat.Item1:F1}/{lat.Item2:F1}/{lat.Item3:F1}ms");
+            DivergenceWindowLog();
             _winFrames = 0;
             _tickMsSum = 0;
             _tickMsMax = 0;
@@ -369,6 +374,8 @@ namespace BannerCoopTW.Spikes.A1
 
             if (_controlSwitched)
                 ApplyInputToControlled();
+            HostStatsTick(dt);
+            BrawlTick(dt);
             Trace("host input applied");
             _sinceSnapshot += dt;
             if (_sinceSnapshot >= SnapshotInterval)
@@ -534,7 +541,13 @@ namespace BannerCoopTW.Spikes.A1
 
         public override void OnAgentRemoved(Agent affectedAgent, Agent affectorAgent, AgentState agentState, KillingBlow blow)
         {
-            if (!_host || !_running || !_linked || !_hostById.ContainsKey(affectedAgent.Index))
+            if (!_host)
+            {
+                NoteClientRemoval(affectedAgent);
+                return;
+            }
+
+            if (!_running || !_linked || !_hostById.ContainsKey(affectedAgent.Index))
                 return;
             var ms = new MemoryStream();
             using (var w = new BinaryWriter(ms))
@@ -622,6 +635,9 @@ namespace BannerCoopTW.Spikes.A1
                         break;
                     case MsgDeath:
                         ApplyDeath(r);
+                        break;
+                    case MsgStats:
+                        ApplyHostStats(r);
                         break;
                     case MsgSiege:
                         SiegeApply(r);
@@ -732,6 +748,8 @@ namespace BannerCoopTW.Spikes.A1
                     continue;
                 if (a == _controlled)
                     ObserveControlled(pos, now);
+                if (a != _controlled)
+                    NotePositionError(a.Position.Distance(pos));
                 if (a.Position.Distance(pos) > 0.25f)
                     a.TeleportToPosition(pos);
                 if (look.LengthSquared > 0.0001f)
@@ -745,23 +763,6 @@ namespace BannerCoopTW.Spikes.A1
             }
 
             _snapshotsApplied++;
-        }
-
-        private void ObserveControlled(Vec3 pos, long now)
-        {
-            if (_lastControlledPosAt > 0 && now > _lastControlledPosAt)
-            {
-                var speed = pos.AsVec2.Distance(_lastControlledPos.AsVec2) / ((now - _lastControlledPosAt) / 1000f);
-                if (_forwardStartedAt >= 0 && !_forwardObserved && speed > 0.8f)
-                {
-                    _forwardObserved = true;
-                    _effectLatencies.Add(now - _forwardStartedAt);
-                    Log($"client: movement visible {now - _forwardStartedAt} ms after the forward input started (speed {speed:F1} m/s)");
-                }
-            }
-
-            _lastControlledPos = pos;
-            _lastControlledPosAt = now;
         }
 
         private void ApplyHit(BinaryReader r)
@@ -785,7 +786,15 @@ namespace BannerCoopTW.Spikes.A1
                 // Die() with a real blow so the client's own mission logic (morale, scoring) gets a valid killer instead of throwing.
                 var killer = _table.TryGetValue(attacker, out var k) ? k : a;
                 var blow = new Blow(killer.Index) { InflictedDamage = (int)a.Health + 1, DamageType = DamageTypes.Cut };
-                a.Die(blow, state == AgentState.Unconscious ? Agent.KillInfo.Gravity : Agent.KillInfo.Invalid);
+                _applyingHostDeath = true;
+                try
+                {
+                    a.Die(blow, state == AgentState.Unconscious ? Agent.KillInfo.Gravity : Agent.KillInfo.Invalid);
+                }
+                finally
+                {
+                    _applyingHostDeath = false;
+                }
             }
 
             _deathsApplied++;
@@ -798,11 +807,11 @@ namespace BannerCoopTW.Spikes.A1
             var t = _runningTime;
             if (_controlled != null && _controlled.IsActive())
             {
-                if (t > 3f)
+                if (t > 3f && InputScriptBackward(t))
+                    flags |= (uint)Agent.MovementControlFlag.Backward;
+                if (t > 3f && InputScriptForward(t))
                 {
                     flags |= (uint)Agent.MovementControlFlag.Forward;
-                    if (_forwardStartedAt < 0)
-                        _forwardStartedAt = NowMs;
                     var target = NearestEnemy();
                     if (target != null)
                     {
@@ -816,6 +825,7 @@ namespace BannerCoopTW.Spikes.A1
                 }
             }
 
+            NoteInputEdge((flags & (uint)(Agent.MovementControlFlag.Forward | Agent.MovementControlFlag.Backward)) != 0);
             var seq = ++_inputSeq;
             _inputSentAt[seq] = NowMs;
             _inputSentAt.Remove(seq - 300);
@@ -858,7 +868,8 @@ namespace BannerCoopTW.Spikes.A1
             try
             {
                 var lat = Percentiles(_ackLatencies);
-                Log($"summary role={(_host ? "host" : "client")} baselineFps={(_baselineWindows > 0 ? _baselineFpsSum / _baselineWindows : 0):F1} effectLatencies=[{string.Join(",", _effectLatencies)}] ms");
+                Log($"summary role={(_host ? "host" : "client")} baselineFps={(_baselineWindows > 0 ? _baselineFpsSum / _baselineWindows : 0):F1} effectLatencies=[{string.Join(",", _effectLatencies)}] ms stopLatencies=[{string.Join(",", _stopLatencies)}] ms");
+                EffectSummaryLog("final");
                 _tsv.Dispose();
                 (_server as IDisposable)?.Dispose();
                 (_client as IDisposable)?.Dispose();

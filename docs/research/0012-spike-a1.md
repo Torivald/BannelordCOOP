@@ -2,6 +2,8 @@
 
 STATUS: field battle part **done** (100 agents, 12 min); siege part **partly done and deliberately paused** (owner decision 2026-10-25: sieges after a working multiplayer exists); crafted-item investigation **static analysis only**.
 
+> **Correction (2026-10-25, research 0013):** every "n100" run in this note was 100 agents of one side against 1 enemy (the troop-count array was shared and consumed by the first side). Throughput/latency figures stand as "100 moving puppets"; fights, hits and deaths in these runs were not representative.
+
 ## Question
 Can two game instances run the same single-player Custom Battle mission, the host authoritative, the client a mirror driven over `ITransport` (LiteNetLib)? Agents addressed by (type, StringId) through a translation table.
 

@@ -154,3 +154,8 @@ Campaign sync, save sync, matchmaking, NAT traversal, production servers, optimi
 - Gate A1 verdict by architect-reviewer: see research 0012 "Review".
 - Tests actually run: game runs listed above; no new unit tests; `dotnet build -c Release` 0 errors.
 - Next: Phase 5/6 (campaign sync, battle start pipeline) toward a working multiplayer; manual vanilla crafted-item test; investigate the client transient when relevant.
+
+## 2026-10-25 — Spike A1b (branch `phase2d/spike-a1b`, research 0013) — PAUSED, not merged
+- Real 50 vs 50 fight, 13 min, deaths on: 5359 hits and 63 deaths replicated, alive/health host=client in all 156 windows, 0 local blows on the client, position error p50 0.15 / p95 0.29 m, no tick errors. Effect latency (not in melee) p95 128–134 ms < 150 ms; in melee the measurement was flawed (p95 324 ms), to be redone.
+- **Corrections:** all earlier "n100" runs were 100 vs 1 (shared troop-count array, fixed); the game pauses on window focus loss (`StopGameOnFocusLost`, host froze twice) — spike disables it, the product must too; LiteNetLib `Simulate*` has no effect in the referenced build → own `NetworkConditionTransport` (4 tests pass) written but **not wired**, so no network-emulation result exists.
+- FPS dip not reproduced; instrumentation in place. Verdict by architect-reviewer on A1b: **not obtained**. Next steps are listed at the end of research 0013.

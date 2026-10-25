@@ -54,6 +54,19 @@ namespace BannerCoopTW.Networking
 
         protected NetManager Manager { get; }
 
+        /// <summary>
+        /// Test aid (A1b network emulation): LiteNetLib drops <paramref name="lossPercent"/> % of packets (both delivery modes; reliable ones are resent)
+        /// and delays each by a random time in [min, max] ms, in the direction this endpoint sends/receives. Never enabled outside spikes.
+        /// </summary>
+        public void SimulateNetwork(int lossPercent, int minLatencyMs, int maxLatencyMs)
+        {
+            Manager.SimulatePacketLoss = lossPercent > 0;
+            Manager.SimulationPacketLossChance = lossPercent;
+            Manager.SimulateLatency = maxLatencyMs > 0;
+            Manager.SimulationMinLatency = minLatencyMs;
+            Manager.SimulationMaxLatency = Math.Max(minLatencyMs, maxLatencyMs);
+        }
+
         public int LocalPort => Manager.LocalPort;
 
         public void Send(ConnectionId connection, byte[] data, DeliveryMode mode)
