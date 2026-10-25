@@ -1,11 +1,12 @@
 # Current State — Bannerlord Co-op
 
-Last updated: 2026-10-18 (mods cleaned; GAME_GUIDE + session resume spec)
+Last updated: 2026-10-25 (spikes S1/S2 run; Phase 3 core and Phase 4 transport in separate PRs)
 
 ## Phase
 
-2 — API research — **DONE on paper, gates S1/S2 open** (PR `phase2/research`, stacked on PR #2)
-→ next: Phase 2b spikes S1/S2, Phase 3 core in parallel
+2b — spikes S1/S2 **run** (PR `phase2b/spikes`, research 0010): **S1 partial, S2 blocked at the client connect** → ADR-0006 "provisional — at risk".
+Parallel branches: `phase3/core-allocation` (slot/reservation core + wire protocol, unit-tested), `phase4/transport` (ITransport + LiteNetLib 1.3.5, fake-client tests).
+→ next: S2 follow-up experiments (research 0010 §Follow-up), GUID translation vs canonical reload decision
 
 (Phase 1 — mod shell — DONE, PR #2)
 
@@ -124,3 +125,11 @@ Details: `docs/research/0001-environment.md`, ADR-0009.
 ## Do not do yet
 
 Campaign sync, save sync, matchmaking, NAT traversal, production servers, optimisation, UI polish.
+
+
+## 2026-10-25 — Spikes S1/S2 (research 0010)
+- S1: cold loads of one file give identical (type, StringId) → MBGUID; a save→load cycle shifts 300 CharacterObject GUIDs (fixed point afterwards). Order-independent content checksum is stable and cheap (9–35 ms).
+  Local costs: capture ≈1 s, load ≈3.7 s, file read ≈0.9 s; real-network transfer, crafted items, mods, real play not measured.
+- S2: native listen server starts inside a campaign process and session key/peer index are readable without a lobby; the second instance never connects (120 s then disconnect callbacks). Cause open.
+- Tooling: `tools/dev/run-session.sh`, `run-pair.sh`, `dismiss-safemode.ps1` (handles the Safe Mode dialog after a force-killed run), `compare-guid-dumps.ps1`.
+- Tests actually run: Core unit tests 14 on this branch; spike results come from real two-instance runs, not tests.
