@@ -32,19 +32,19 @@
 
 ## Battle Participation
 
-- [ ] attacker selection
-- [ ] defender selection
-- [ ] spectator selection
-- [ ] lord allocation
-- [ ] officer allocation
-- [ ] troop-class allocation
-- [ ] last-slot conflict
-- [ ] reservation timeout
-- [ ] controlled death
-- [ ] reallocation
-- [ ] reinforcement slot
-- [ ] disconnect during control
-- [ ] battle completion
+- [x] attacker selection — unit level only (Core: BattleSession, tests/BannerCoopTW.Core.Tests); not exercised in a game
+- [x] defender selection — unit level only (Core: BattleSession, tests/BannerCoopTW.Core.Tests); not exercised in a game
+- [x] spectator selection — unit level only (Core: BattleSession, tests/BannerCoopTW.Core.Tests); not exercised in a game
+- [x] lord allocation — unit level only (Core: BattleSession, tests/BannerCoopTW.Core.Tests); not exercised in a game
+- [x] officer allocation — unit level only (Core: BattleSession, tests/BannerCoopTW.Core.Tests); not exercised in a game
+- [x] troop-class allocation — unit level only (Core: BattleSession, tests/BannerCoopTW.Core.Tests); not exercised in a game
+- [x] last-slot conflict — unit level only (Core: BattleSession, tests/BannerCoopTW.Core.Tests); not exercised in a game
+- [x] reservation timeout — unit level only (Core: BattleSession, tests/BannerCoopTW.Core.Tests); not exercised in a game
+- [x] controlled death — unit level only (Core: BattleSession, tests/BannerCoopTW.Core.Tests); not exercised in a game
+- [x] reallocation — unit level only (Core: BattleSession, tests/BannerCoopTW.Core.Tests); not exercised in a game
+- [x] reinforcement slot — unit level only (Core: BattleSession, tests/BannerCoopTW.Core.Tests); not exercised in a game
+- [x] disconnect during control — unit level only (Core: BattleSession, tests/BannerCoopTW.Core.Tests); not exercised in a game
+- [x] battle completion — unit level only (Core: BattleSession, tests/BannerCoopTW.Core.Tests); not exercised in a game
 
 ## Session resume
 
@@ -56,6 +56,13 @@
 - [ ] Start disabled until all connected players have a hero
 - [ ] late joiner with a free slot creates a new hero (own clan, culture town) — if S3 passes
 - [ ] 5th player rejected when all 4 slots are taken
+
+## Phase 3 core (unit level, no game)
+
+- [x] seat/player state machines, atomic reservation (200-round concurrent claim tests), 10–15 s timeout, initiator hero pinned
+- [x] AI losses shrink classes; agent death before confirm; ControlReleased on release/spectate/disconnect
+- [x] versioned wire protocol (round-trip of every message, truncation, mutation and fuzz never throw, strict enums/bools)
+- [ ] not covered: siege-specific defender roles / destroyed engines, host loss, snapshots/deltas with base revision, rate limiting
 
 ## Regression
 

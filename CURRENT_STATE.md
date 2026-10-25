@@ -126,10 +126,15 @@ Details: `docs/research/0001-environment.md`, ADR-0009.
 
 Campaign sync, save sync, matchmaking, NAT traversal, production servers, optimisation, UI polish.
 
-
 ## 2026-10-25 — Spikes S1/S2 (research 0010)
 - S1: cold loads of one file give identical (type, StringId) → MBGUID; a save→load cycle shifts 300 CharacterObject GUIDs (fixed point afterwards). Order-independent content checksum is stable and cheap (9–35 ms).
   Local costs: capture ≈1 s, load ≈3.7 s, file read ≈0.9 s; real-network transfer, crafted items, mods, real play not measured.
 - S2: native listen server starts inside a campaign process and session key/peer index are readable without a lobby; the second instance never connects (120 s then disconnect callbacks). Cause open.
 - Tooling: `tools/dev/run-session.sh`, `run-pair.sh`, `dismiss-safemode.ps1` (handles the Safe Mode dialog after a force-killed run), `compare-guid-dumps.ps1`.
 - Tests actually run: Core unit tests 14 on this branch; spike results come from real two-instance runs, not tests.
+
+## 2026-10-25 — Phase 3 core (branch `phase3/core-allocation`)
+- `BannerCoopTW.Core.Battle`: SlotCatalog, ReservationService, BattleSession, seat/player state machines; `BannerCoopTW.Core.Protocol`: versioned binary wire protocol.
+  Details and known limitations: `docs/architecture/BATTLE_PARTICIPATION.md` ("Implementation status").
+- Tests actually run: 107 xUnit tests (net8.0), including 200-round concurrent claims, fuzz/mutation of frames, expiry with a moving clock. Not run on net472 / inside the game.
+- Reviewed by the architect-reviewer agent; critical findings (pinned initiator hero, AI losses, agent death before confirm, ControlReleased, lost expiry events, catalog thread-safety, epoch, cap, strict decoding) fixed in the same PR.
