@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Transport abstraction + LiteNetLib backend (ADR-0012). netstandard2.0 so the net472 game module can use it.
+       LiteNetLib 1.3.5 is the last 1.x line (MIT) that still targets netstandard2.0; 2.x targets net8.0/netstandard2.1 only. -->
+  <PropertyGroup>
+    <TargetFramework>netstandard2.0</TargetFramework>
+    <RootNamespace>BannerCoopTW.Networking</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="LiteNetLib" Version="1.3.5" />
+    <PackageReference Include="Nullable" Version="1.3.1" PrivateAssets="all" IncludeAssets="runtime; build; native; contentfiles; analyzers; buildtransitive" />
+    <PackageReference Include="IsExternalInit" Version="1.0.3" PrivateAssets="all" IncludeAssets="runtime; build; native; contentfiles; analyzers; buildtransitive" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\BannerCoopTW.Core\BannerCoopTW.Core.csproj" />
+    <InternalsVisibleTo Include="BannerCoopTW.Networking.Tests" />
+  </ItemGroup>
+
+</Project>

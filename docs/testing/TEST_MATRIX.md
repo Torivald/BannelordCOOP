@@ -22,13 +22,13 @@
 
 ## Networking
 
-- [ ] client connects
-- [ ] disconnect detected
+- [x] client connects — fake clients over LiteNetLib UDP on localhost (no game)
+- [x] disconnect detected — server notices a killed client and frees the seat (no game)
 - [ ] session created
 - [ ] one entity synchronized
-- [ ] claim accepted
-- [ ] conflicting claim rejected
-- [ ] release works
+- [x] claim accepted — integration, fake clients (no game)
+- [x] conflicting claim rejected — integration, simultaneous last-slot claim (no game)
+- [x] release works — integration, fake clients (no game)
 
 ## Battle Participation
 
