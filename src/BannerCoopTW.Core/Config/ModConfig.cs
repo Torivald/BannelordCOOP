@@ -18,6 +18,20 @@ namespace BannerCoopTW.Core.Config
         /// <summary>Show "BannerCoopTW vX loaded" in the game's message log.</summary>
         public bool ShowLoadedMessage { get; set; } = true;
 
+        /// <summary>Enables the debug-only Phase 2b spike console commands (<c>coop.*</c>).</summary>
+        public bool SpikesEnabled { get; set; }
+
+        /// <summary>Spike automation: save name loaded automatically at the main menu (empty = off).</summary>
+        public string SpikeAutoLoadSave { get; set; } = string.Empty;
+
+        /// <summary>Spike automation: comma-separated commands run once the campaign finished loading (e.g. <c>dump_guids,world_hash</c>).</summary>
+        public string SpikeAutoRun { get; set; } = string.Empty;
+
+        /// <summary>Spike automation for two instances: script of the instance that wins the role election (host) / of the other one.</summary>
+        public string SpikeAutoRunHost { get; set; } = string.Empty;
+
+        public string SpikeAutoRunClient { get; set; } = string.Empty;
+
         public List<string> Problems { get; } = new List<string>();
 
         public static ModConfig Parse(string text)
@@ -68,6 +82,11 @@ namespace BannerCoopTW.Core.Config
             sb.Append("# LogLevel: Debug | Info | Warning | Error\n");
             sb.Append("LogLevel=").Append(LogLevel).Append('\n');
             sb.Append("ShowLoadedMessage=").Append(ShowLoadedMessage ? "true" : "false").Append('\n');
+            sb.Append("SpikesEnabled=").Append(SpikesEnabled ? "true" : "false").Append('\n');
+            sb.Append("SpikeAutoLoadSave=").Append(SpikeAutoLoadSave).Append('\n');
+            sb.Append("SpikeAutoRun=").Append(SpikeAutoRun).Append('\n');
+            sb.Append("SpikeAutoRunHost=").Append(SpikeAutoRunHost).Append('\n');
+            sb.Append("SpikeAutoRunClient=").Append(SpikeAutoRunClient).Append('\n');
             return sb.ToString();
         }
 
@@ -84,6 +103,23 @@ namespace BannerCoopTW.Core.Config
                     if (!bool.TryParse(value, out var show))
                         return false;
                     ShowLoadedMessage = show;
+                    return true;
+                case "spikesenabled":
+                    if (!bool.TryParse(value, out var spikes))
+                        return false;
+                    SpikesEnabled = spikes;
+                    return true;
+                case "spikeautoloadsave":
+                    SpikeAutoLoadSave = value;
+                    return true;
+                case "spikeautorunhost":
+                    SpikeAutoRunHost = value;
+                    return true;
+                case "spikeautorunclient":
+                    SpikeAutoRunClient = value;
+                    return true;
+                case "spikeautorun":
+                    SpikeAutoRun = value;
                     return true;
                 default:
                     return false;
