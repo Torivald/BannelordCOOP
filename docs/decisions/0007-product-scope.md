@@ -9,7 +9,7 @@ Status: Accepted
 | MVP player count | 4 |
 | Hosting | Two modes: dedicated host and Steam invite (player-hosted). |
 | PvP | Allowed: players may join the opposing side and control enemy lords. |
-| Sieges | In scope (not only field battles). |
+| Sieges | In scope **for the MVP** (not only field battles). Re-confirmed by the user 2026-10-25 after ADR-0006 switched to option A, knowing sieges become the riskiest part of Phase 7. |
 | Player characters | Immortal (never die; knock-out only). |
 | Resume from save (2026-10-18) | Host loads the co-op save → campaign **paused until every connected player has reclaimed their hero** in a selection window (SESSION_RESUME.md). |
 | Late join (2026-10-18) | Up to **4 player slots**; a player joining later (e.g. 4th of a 3-player campaign) may **create a new hero** via vanilla character creation, as **their own new clan** in a town of their culture. Gated by spike S3; **may be disabled for MVP** if too complex (user-accepted). |
