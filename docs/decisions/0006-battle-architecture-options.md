@@ -1,8 +1,12 @@
 # ADR-0006: Battle transport — custom netcode vs native multiplayer stack
 
-Status: **Provisional — at risk (2026-10-25, research 0010): S1 partial (GUID translation or canonical reload required), S2 blocked at the client connect. Option B as a listen server inside the campaign ("B-listen")**; option A is an active fallback,
-gated by spikes S1 + S2 below; Option A is the fallback · decided 2026-10-18 after Phase 2
-(research 0003, 0004, 0005).
+Status: **Accepted (2026-10-25, research 0011): option A — custom netcode over single-player missions — for MVP battles, subject to Gate A1. Option B (native multiplayer stack, listen or dedicated) rejected for the MVP.** Superseded history: decided 2026-10-18 as B-listen (provisional, gates S1/S2); "provisional — at risk" 2026-10-25 (research 0010).
+
+**Reopen B only if** (a) a budgeted (≤ 2 windows) stock-faithful spike (`Module.CurrentModule.StartMultiplayerGame` + `BannerlordNetwork.CreateServerPeer` inside a campaign `Game`, with a positive control and the firewall ruled out) connects a client and delivers one mod message; (b) a TaleWorlds update provides a lobby-less LAN/custom host; (c) Gate A1 or G3 fails.
+
+> The "Decision (Phase 2 verdict)" section below describes the **former** B-listen decision and is kept as history. Reason for the change: S2 (four experiments, research 0011) — the native listen server inside a campaign process never answered the client's UDP connect stream; S1 — the host's live session does not match peers that load its save (765 CharacterObject, 421 ItemObject GUIDs differ). Neither proves B impossible (no positive control; stock-faithful flow not run).
+
+**Option A consequences:** battles are replicated over our `ITransport` (Phase 4; unreliable-sequenced channel for snapshots, reliable for events). References to game objects use (type, StringId) (ADR-0010). New Spike A1 and Gate A1 precede Phase 6 (see MASTER_PLAN).
 
 ## Decision (Phase 2 verdict)
 Run campaign battles on the **native multiplayer stack, hosted by the campaign host's own game process**:

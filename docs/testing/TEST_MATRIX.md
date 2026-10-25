@@ -70,3 +70,12 @@
 - [ ] vanilla campaign still works
 - [ ] mod disabled cleanly
 - [ ] save/load behavior documented
+
+## Spikes S1/S2 (research 0010, 0011)
+
+- [x] S1: two cold loads of one save — identical (type, StringId) → MBGUID in 9 groups, incl. crafted item (2026-10-25)
+- [x] S1: host live session vs reload of its save — **differs** (765 CharacterObject, 421 ItemObject; Hero, MobileParty equal); crafted item absent after reload
+- [ ] S1: crafted item held by a hero/party; second PC; mods; real play; translation table implemented
+- [ ] S2: client connects to a native listen server started in a campaign — **FAILED** in 4 experiments (loopback capture, mission before server, Multiplayer module, realistic PlayerIds); server never answers the UDP stream
+- [ ] S2: positive control (stock host/join on this PC) and firewall check — not done
+- [ ] Spike A1 / Gate A1 (mirror mission, 1 controlled + 100 puppet agents) — not started
