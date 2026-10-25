@@ -49,7 +49,7 @@ A Mount & Blade II: Bannerlord co-op mod whose first target is **Battle Particip
 - Bannerlord Together (Workshop 3761555398) is present locally for reference. Its proprietary license and
   `AI_USAGE_POLICY_DO_NOT_DECOMPILE.txt` forbid decompiling, analysing or processing it with AI. **Do not
   decompile, open the DLLs, or read its files.** It is git-ignored. Use only its public descriptions; ask
-  its authors directly for design information.
+  its authors directly for design information. Permission scope and allowed use: ADR-0013.
 - Allowed MIT/permissive dependencies: BUTR Module.Template, Harmony (Bannerlord.Harmony),
   ButterLib, UIExtenderEx, Harmony.Extensions, LiteNetLib (MIT) — verify license at add time.
 
