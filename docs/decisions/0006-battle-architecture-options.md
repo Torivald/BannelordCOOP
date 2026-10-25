@@ -1,6 +1,6 @@
 # ADR-0006: Battle transport — custom netcode vs native multiplayer stack
 
-Status: **Accepted (provisional) — Option B as a listen server inside the campaign ("B-listen")**,
+Status: **Provisional — at risk (2026-10-25, research 0010): S1 partial (GUID translation or canonical reload required), S2 blocked at the client connect. Option B as a listen server inside the campaign ("B-listen")**; option A is an active fallback,
 gated by spikes S1 + S2 below; Option A is the fallback · decided 2026-10-18 after Phase 2
 (research 0003, 0004, 0005).
 
@@ -66,3 +66,12 @@ agent via native MP control; result is sent back to the campaign.
 ## Allocation logic is independent
 Reservation/allocation (BattleSession, slots, timeouts) is pure C# and identical in both options.
 Build and unit-test it first.
+
+
+## Spike results (2026-10-25, research 0010)
+- **S1 — partial.** Cold loads of the same file agree on every (type, StringId) → MBGUID; a save→load cycle relocates one CharacterObject and shifts 299 others by +1, after which the registry is a fixed point.
+  The host's live session therefore differs from clients that loaded its save. Remedy to adopt: identity on the wire = (type, StringId) with a per-battle GUID translation table, or canonical reload on the host.
+  Not tested: crafted items, runtime-created objects, mods, other machines.
+- **S2 — blocked.** Server half works in a campaign process (Initialize, StartMultiplayerOnServer, AddNewPlayerOnServer; session key and peer index readable without a lobby);
+  the second instance's `StartMultiplayerOnClient` returns but never connects (disconnect callback after 120 s). Cause open; four time-boxed experiments are listed in research 0010.
+- Do not start Phase 6 under option B until S2 passes; keep a short spike plan for option A ready.

@@ -27,6 +27,10 @@ for everyone during the single global battle. Research shows:
    Rationale: a 6–8 MB transfer + world reload on every encounter (incl. bandit skirmishes) could cost
    20–60 s per battle. Spike S1 must measure capture, transfer and load times and confirm that
    a matching checksum is sufficient for MBGUID parity (ADR-0006).
+   **Amended 2026-10-25 (research 0010):** a matching content checksum is *not* sufficient for MBGUID parity: after a save→load cycle the
+   content is identical but 300 CharacterObject MBGUIDs shift. The checksum is therefore order-independent and keyed by (type, StringId)
+   (registry sets of the eight types + rosters/equipment [+gold/inventory]), without MBGUID values; MBGUIDs are translated per battle
+   (or the host reloads its own saved bytes before sending). Measured locally: capture ≈1 s, load ≈3.7 s, checksum 9–35 ms; real-network transfer not yet measured.
 3. **Between resyncs: state deltas** at a fixed rate (e.g. 5–10 Hz) for what clients must see live:
    mobile party positions/targets/states, map events start/end, settlement ownership/sieges, player
    parties' rosters/gold/inventory, time & pause. Everything else waits for the next resync.
