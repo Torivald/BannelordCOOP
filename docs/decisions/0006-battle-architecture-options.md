@@ -79,3 +79,6 @@ Build and unit-test it first.
 - **S2 — blocked.** Server half works in a campaign process (Initialize, StartMultiplayerOnServer, AddNewPlayerOnServer; session key and peer index readable without a lobby);
   the second instance's `StartMultiplayerOnClient` returns but never connects (disconnect callback after 120 s). Cause open; four time-boxed experiments are listed in research 0010.
 - Do not start Phase 6 under option B until S2 passes; keep a short spike plan for option A ready.
+
+## Spike A1 result (2026-10-25, research 0012)
+Gate A1 for the field battle: **passed with conditions** (architect-reviewer). 1 controlled + 101 puppets for 12 min without crash, ack p50 ≈ 40 ms, ≈ 70 KB/s on loopback; conditions (deaths on, effect-latency p95 < 150 ms, divergence counters, client transient, second PC) are listed as "A1b" in MASTER_PLAN. No reopen condition is met; option A stays accepted. Sieges are deferred until a working multiplayer exists (owner decision).

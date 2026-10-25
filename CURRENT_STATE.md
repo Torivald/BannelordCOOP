@@ -1,6 +1,6 @@
 # Current State — Bannerlord Co-op
 
-Last updated: 2026-10-25 (S2 time-box and S1 live check done; ADR-0006 switched to option A)
+Last updated: 2026-10-25 (Spike A1 continued: 100 agents / 12 min soak done; sieges paused by owner)
 
 ## Phase
 
@@ -146,3 +146,11 @@ Campaign sync, save sync, matchmaking, NAT traversal, production servers, optimi
 - `BannerCoopTW.Networking` (netstandard2.0): `ITransport` (reliable-ordered + unreliable, connection events, Poll-driven), LiteNetLib **1.3.5** backend (MIT; 2.x does not target netstandard2.0), `BattleServerHost` (wire messages -> `BattleSession`).
 - Integration tests (16, real UDP on localhost, no game): 4 fake clients join, simultaneous last-slot claim, disconnect during reservation/control, reservation expiry, stale epoch, protocol/build mismatch, player cap, engine-side confirm.
   Run 4 times in a row without a failure. Not tested: Steam backend, NAT, large payloads, packet loss, real latency, inside the game.
+
+## 2026-10-25 — Spike A1 continuation (branch `phase2d/spike-a1-cont`, research 0012)
+- Field battle, 1 controlled + 101 puppets, loopback: solo controls (1 and 2 instances) show no stalls; sync run 12 min (`n100:nodie`, `Mission.DisableDying`) without crash or tick error; ack latency p50 ≈ 40 ms / p95 ≈ 62 ms; ≈ 70 KB/s host→client; 824 hits replicated. The 22 s stalls of the first session did **not** reproduce (cause unproven). One unexplained ~36 s client transient (fps 4–6) in the soak.
+- Sieges: puppet mode implemented (`SetScriptComponentToTick(None)`, ranged state written raw because the setter fires a projectile locally in SP); `siege:n30` run: 290 events, 0 divergence, 0 crashes. Ladder confirmation, throwing machines (`mach` mode crashes the game at battle start), animations and projectiles **not verified**. **Owner decision: sieges are checked after a working multiplayer exists** (do not continue them before that).
+- Crafted item loss: only static analysis (research 0012 facts 19–21); `crafted_report` on saves `livaem` / `ne livaem` printed nothing; vanilla repetition needs manual play by the owner (procedure in 0012).
+- Gate A1 verdict by architect-reviewer: see research 0012 "Review".
+- Tests actually run: game runs listed above; no new unit tests; `dotnet build -c Release` 0 errors.
+- Next: Phase 5/6 (campaign sync, battle start pipeline) toward a working multiplayer; manual vanilla crafted-item test; investigate the client transient when relevant.

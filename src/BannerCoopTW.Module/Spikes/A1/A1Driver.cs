@@ -108,6 +108,15 @@ namespace BannerCoopTW.Spikes.A1
                     MissionSiegeWeapon.CreateDefaultWeapon(DefaultSiegeEngineTypes.Ballista),
                 };
                 var defenders = new System.Collections.Generic.List<MissionSiegeWeapon> { MissionSiegeWeapon.CreateDefaultWeapon(DefaultSiegeEngineTypes.Ballista) };
+                if (Mode.Contains("mach"))
+                {
+                    // throwing machines (mode 'mach'): the scene decides how many fit, the rest is dropped
+                    attackers.Add(MissionSiegeWeapon.CreateDefaultWeapon(DefaultSiegeEngineTypes.Catapult));
+                    attackers.Add(MissionSiegeWeapon.CreateDefaultWeapon(DefaultSiegeEngineTypes.Onager));
+                    defenders.Add(MissionSiegeWeapon.CreateDefaultWeapon(DefaultSiegeEngineTypes.Trebuchet));
+                    defenders.Add(MissionSiegeWeapon.CreateDefaultWeapon(DefaultSiegeEngineTypes.Bricole));
+                }
+
                 data = CustomBattleHelper.PrepareBattleData(chars[0], null, parties[0], parties[1], CustomBattlePlayerSide.Attacker, CustomBattlePlayerType.Commander,
                     "Siege", "empire_siege_001", "summer", 12f, attackers, defenders, CustomBattleHelper.GetWallHitpointPercentages(0), 2, false, null);
             }
