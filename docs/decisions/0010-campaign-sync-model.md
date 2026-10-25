@@ -31,6 +31,11 @@ for everyone during the single global battle. Research shows:
    content is identical but 300 CharacterObject MBGUIDs shift. The checksum is therefore order-independent and keyed by (type, StringId)
    (registry sets of the eight types + rosters/equipment [+gold/inventory]), without MBGUID values; MBGUIDs are translated per battle
    (or the host reloads its own saved bytes before sending). Measured locally: capture ≈1 s, load ≈3.7 s, checksum 9–35 ms; real-network transfer not yet measured.
+   **Rule (2026-10-25, research 0011):** an object's identity in our protocol is the pair **(type, StringId)**. An `MBGUID` is only a local handle of
+   the process that owns the object and never goes on the wire as an identifier. For every battle the host builds a **translation table
+   host GUID → local GUID** from (type, StringId) pairs; each client resolves incoming references through its own registry. (Measured: after a
+   save→load cycle 765 CharacterObject and 421 ItemObject GUIDs differ from the saver's live session; runtime-created items such as a crafted item
+   may be absent after the cycle, so they are sent by value, not by reference.)
 3. **Between resyncs: state deltas** at a fixed rate (e.g. 5–10 Hz) for what clients must see live:
    mobile party positions/targets/states, map events start/end, settlement ownership/sieges, player
    parties' rosters/gold/inventory, time & pause. Everything else waits for the next resync.

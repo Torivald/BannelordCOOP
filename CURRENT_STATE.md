@@ -1,12 +1,15 @@
 # Current State — Bannerlord Co-op
 
-Last updated: 2026-10-25 (spikes S1/S2 run; Phase 3 core and Phase 4 transport in separate PRs)
+Last updated: 2026-10-25 (S2 time-box and S1 live check done; ADR-0006 switched to option A)
 
 ## Phase
 
-2b — spikes S1/S2 **run** (PR `phase2b/spikes`, research 0010): **S1 partial, S2 blocked at the client connect** → ADR-0006 "provisional — at risk".
-Parallel branches: `phase3/core-allocation` (slot/reservation core + wire protocol, unit-tested), `phase4/transport` (ITransport + LiteNetLib 1.3.5, fake-client tests).
-→ next: S2 follow-up experiments (research 0010 §Follow-up), GUID translation vs canonical reload decision
+2c — S2 time-box finished (research 0011): four connect experiments (loopback capture, mission before server, Multiplayer module, realistic PlayerIds) —
+the client never connected; the native server never answers the client's UDP stream. S1: host's live session ≠ a reload of its save for
+CharacterObject/ItemObject (765/421 GUIDs), crafted item lost after reload, Hero/MobileParty equal.
+→ **ADR-0006 Accepted: option A (custom netcode over SP missions), B rejected for the MVP** (reopen conditions in the ADR); ADR-0010 rule: identity = (type, StringId).
+Merged earlier: Phase 3 core (PR #8), Phase 4 transport start (PR #9), spikes (PR #7).
+→ next: Spike A1 + Gate A1 (mirror mission on Custom Battle, 1 controlled agent + 100 puppets), 5a crafted-item loss on save→load; **decision needed from the owner:** move sieges (7f) after the MVP (ADR-0007 scope).
 
 (Phase 1 — mod shell — DONE, PR #2)
 
@@ -16,7 +19,7 @@ Parallel branches: `phase3/core-allocation` (slot/reservation core + wire protoc
 - Initial review: `docs/research/0000-initial-review.md`; CLAUDE.md v2 (old one in `docs/archive/`).
 - Master plan `docs/plans/MASTER_PLAN.md`, checklist `docs/plans/ENVIRONMENT_CHECKLIST.md`.
 - ADR-0004 (reference-mod license), ADR-0005 (decompilation), ADR-0006 (battle architecture —
-  **B-listen, provisional**), ADR-0007 (product scope), ADR-0008 (Diplomacy integration),
+  **option A accepted 2026-10-25**), ADR-0007 (product scope), ADR-0008 (Diplomacy integration),
   ADR-0009 (module ID/layout), **ADR-0010** (campaign sync), **ADR-0011** (hosting), **ADR-0012** (transport).
 - Player guide `docs/GAME_GUIDE.md` (RU) + `docs/architecture/SESSION_RESUME.md` (resume from save: paused until
   heroes reclaimed, absent players → bot), PR #4.
