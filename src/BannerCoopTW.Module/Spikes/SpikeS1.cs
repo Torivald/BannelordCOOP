@@ -579,6 +579,7 @@ namespace BannerCoopTW.Spikes
                 case "s2_stop": return Guard(SpikeS2.Stop);
                 case "s2_clear": SpikeS2.ClearHandshake(); return "handshake cleared";
                 case "load_save": return Guard(() => SpikeS1.LoadSave(arg));
+                case "crafted_report": return Guard(() => SpikeCrafted.Report(arg));
                 case "dump_guids": return Guard(SpikeS1.DumpGuids);
                 case "world_hash": return Guard(SpikeS1.WorldHash);
                 case "save_timing": return Guard(() => SpikeS1.SaveTiming());

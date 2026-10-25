@@ -4,6 +4,7 @@ using BannerCoopTW.Core;
 using BannerCoopTW.Core.Config;
 using BannerCoopTW.Core.Logging;
 using BannerCoopTW.Spikes;
+using BannerCoopTW.Spikes.A1;
 using TaleWorlds.Core;
 using TaleWorlds.Library;
 using TaleWorlds.MountAndBlade;
@@ -78,6 +79,22 @@ namespace BannerCoopTW
                 {
                     _log?.Error("spike runner failed", e);
                 }
+            }
+
+            if (_config.SpikesEnabled && _config.SpikeA1.Length > 0 && _menuTime >= 0f)
+            {
+                _menuTime += dt;
+                try
+                {
+                    A1Driver.Mode = _config.SpikeA1.Contains(":") ? _config.SpikeA1.Substring(_config.SpikeA1.IndexOf(':') + 1) : string.Empty;
+                    A1Driver.Tick(dt, _menuTime, TryBecomeSpikeHost);
+                }
+                catch (Exception e)
+                {
+                    _log?.Error("A1 driver failed", e);
+                }
+
+                return;
             }
 
             if (_autoLoaded || _menuTime < 0f || !_config.SpikesEnabled || string.IsNullOrEmpty(_config.SpikeAutoLoadSave))

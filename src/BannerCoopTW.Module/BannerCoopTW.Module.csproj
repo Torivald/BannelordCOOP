@@ -18,6 +18,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\BannerCoopTW.Core\BannerCoopTW.Core.csproj" />
+    <ProjectReference Include="..\BannerCoopTW.Networking\BannerCoopTW.Networking.csproj" />
   </ItemGroup>
 
   <ItemGroup>
