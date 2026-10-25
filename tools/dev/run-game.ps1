@@ -6,7 +6,9 @@
   Number of game instances to start (20 s apart). Two instances on one PC work (research 0001).
 #>
 param(
-    [int]$Instances = 1
+    [int]$Instances = 1,
+    # Adds the stock Multiplayer module (S2 experiment: its OnSubModuleLoad initialises GameNetwork and NetworkMain.SetPeers).
+    [switch]$WithMultiplayer
 )
 $ErrorActionPreference = 'Stop'
 
@@ -14,7 +16,8 @@ $repo = Resolve-Path (Join-Path $PSScriptRoot '..\..')
 $bin = Join-Path $repo 'mb2\bin\Win64_Shipping_Client'
 if (-not (Test-Path (Join-Path $bin 'Bannerlord.exe'))) { throw "mb2 junction missing or invalid ($bin)." }
 
-$modules = '_MODULES_*Bannerlord.Harmony*Native*SandBoxCore*Sandbox*CustomBattle*StoryMode*BannerCoopTW*_MODULES_'
+$mp = if ($WithMultiplayer) { 'Multiplayer*' } else { '' }
+$modules = "_MODULES_*Bannerlord.Harmony*Native*${mp}SandBoxCore*Sandbox*CustomBattle*StoryMode*BannerCoopTW*_MODULES_"
 for ($i = 0; $i -lt $Instances; $i++) {
     if ($i -gt 0) { Start-Sleep -Seconds 20 }
     $p = Start-Process -FilePath (Join-Path $bin 'Bannerlord.exe') -ArgumentList "/singleplayer $modules" -WorkingDirectory $bin -PassThru

@@ -364,8 +364,15 @@ namespace BannerCoopTW.Spikes
         private static string _joinAddress = "";
         private static bool _joinPending;
         private static bool _readyWaitPending;
+        private static bool _missionWaitPending;
 
-        public static bool Busy => _active || _joinPending || _readyWaitPending || _waitWatch != null || Pending.Count > 0;
+        public static void WaitForMission()
+        {
+            _missionWaitPending = true;
+            _advanceWatch = Stopwatch.StartNew();
+        }
+
+        public static bool Busy => _active || _missionWaitPending || _joinPending || _readyWaitPending || _waitWatch != null || Pending.Count > 0;
 
         public static void Enqueue(string script)
         {
@@ -401,6 +408,24 @@ namespace BannerCoopTW.Spikes
                 if (_waitWatch.Elapsed.TotalSeconds < _waitSeconds)
                     return;
                 _waitWatch = null;
+            }
+
+            if (_missionWaitPending)
+            {
+                var m = Mission.Current;
+                if (m == null || m.CurrentState != Mission.State.Continuing)
+                {
+                    if (_advanceWatch != null && _advanceWatch.Elapsed.TotalSeconds < 120)
+                        return;
+                    SubModule.Log?.Info("s2_open_mission: mission not Continuing after 120 s");
+                }
+                else
+                {
+                    SubModule.Log?.Info("s2_open_mission: mission Continuing, scene ready");
+                }
+
+                _missionWaitPending = false;
+                return;
             }
 
             if (_readyWaitPending)
@@ -540,6 +565,13 @@ namespace BannerCoopTW.Spikes
             {
                 case "save_as": return Guard(() => SaveAsImpl(arg));
                 case "mutate": return Guard(Mutate);
+                case "s2_open_mission":
+                    return Guard(() =>
+                    {
+                        var r = SpikeS2.OpenMission();
+                        SpikeRunner.WaitForMission();
+                        return r;
+                    });
                 case "s2_host_start": return Guard(SpikeS2.HostStart);
                 case "s2_ping": return Guard(() => SpikeS2.Ping(int.TryParse(arg, out var pv) ? pv : 1));
                 case "s2_ready": SpikeS2.SignalReady(); return "ready signalled";

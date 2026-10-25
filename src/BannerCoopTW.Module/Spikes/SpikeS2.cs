@@ -222,6 +222,13 @@ namespace BannerCoopTW.Spikes
             return "pings sent: " + sent;
         }
 
+        /// <summary>Experiment (b): the stock host opens a multiplayer mission and waits for it to be Continuing before StartMultiplayerOnServer. Here: a bare arena mission from the campaign.</summary>
+        public static string OpenMission()
+        {
+            MissionState.OpenNew("SpikeS2", new MissionInitializerRecord("arena_empire_a"), mission => new MissionBehavior[0], true, true);
+            return "S2 mission opened (arena_empire_a), waiting for Continuing";
+        }
+
         public static string ReadyFile => Path.Combine(SpikeS1.OutDir, "s2-client-ready.txt");
 
         /// <summary>Host step 1: start the native server from the campaign and register the host's own peer.</summary>
@@ -231,7 +238,7 @@ namespace BannerCoopTW.Spikes
             EnsureHandler();
             var ok = Step($"GameNetwork.StartMultiplayerOnServer({Port})", () => GameNetwork.StartMultiplayerOnServer(Port));
             if (ok == "OK")
-                Step("AddNewPlayerOnServer(host, serverPeer:true)", () => GameNetwork.AddNewPlayerOnServer(MakeInfo(1, "spike-host"), true, true));
+                Step("AddNewPlayerOnServer(host, serverPeer:true)", () => GameNetwork.AddNewPlayerOnServer(MakeInfo(76561198000000001UL, "spike-host"), true, true));
             return State();
         }
 
@@ -239,7 +246,7 @@ namespace BannerCoopTW.Spikes
         public static string HostAddRemote()
         {
             ICommunicator? remote = null;
-            Step("AddNewPlayerOnServer(client, serverPeer:false)", () => remote = GameNetwork.AddNewPlayerOnServer(MakeInfo(2, "spike-client"), false, false));
+            Step("AddNewPlayerOnServer(client, serverPeer:false)", () => remote = GameNetwork.AddNewPlayerOnServer(MakeInfo(76561198000000002UL, "spike-client"), false, false));
             if (remote is NetworkCommunicator nc)
             {
                 File.WriteAllText(HandshakeFile, $"{nc.SessionKey}	{nc.Index}");
