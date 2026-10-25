@@ -9,7 +9,7 @@ Status: Accepted
 | MVP player count | 4 |
 | Hosting | Two modes: dedicated host and Steam invite (player-hosted). |
 | PvP | Allowed: players may join the opposing side and control enemy lords. |
-| Sieges | In scope **for the MVP** (not only field battles). Re-confirmed by the user 2026-10-25 after ADR-0006 switched to option A, knowing sieges become the riskiest part of Phase 7. |
+| Sieges | **After the MVP** (decided by the user 2026-10-25, after ADR-0006 switched to option A and Spike A1 showed sieges are the riskiest part). MVP = field battles, bandits, hideouts; sieges are the first post-MVP milestone. Earlier entries ("in scope for the MVP") are superseded. |
 | Player characters | Immortal (never die; knock-out only). |
 | Resume from save (2026-10-18) | Host loads the co-op save → campaign **paused until every connected player has reclaimed their hero** in a selection window (SESSION_RESUME.md). |
 | Late join (2026-10-18) | Up to **4 player slots**; a player joining later (e.g. 4th of a 3-player campaign) may **create a new hero** via vanilla character creation, as **their own new clan** in a town of their culture. Gated by spike S3; **may be disabled for MVP** if too complex (user-accepted). |
@@ -23,7 +23,7 @@ Status: Accepted
   campaign; feasibility must be researched.
 - ADR-0006 option B (native MP mission for battles) remains possible: campaign host spawns/hands
   off a battle server; option A remains the fallback.
-- Allocation must handle PvP (opposing-side lord slots) and siege-specific roles.
+- Allocation must handle PvP (opposing-side lord slots); siege-specific roles are designed now but enabled post-MVP.
 - "Immortal" player heroes: knocked-out player returns to slot selection if a slot is free,
   otherwise spectates (default, to confirm).
 
