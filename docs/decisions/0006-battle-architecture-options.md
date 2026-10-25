@@ -84,3 +84,6 @@ Build and unit-test it first.
 
 ## Spike A1 result (2026-10-25, research 0012)
 Gate A1 for the field battle: **passed with conditions** (architect-reviewer). 1 controlled + 101 puppets for 12 min without crash, ack p50 ≈ 40 ms, ≈ 70 KB/s on loopback; conditions (deaths on, effect-latency p95 < 150 ms, divergence counters, client transient, second PC) are listed as "A1b" in MASTER_PLAN. No reopen condition is met; option A stays accepted. Sieges are deferred until a working multiplayer exists (owner decision).
+
+## Spike A1b result (2026-10-25, research 0013)
+Gate A1b: **passed with conditions** (architect-reviewer). Real two-sided fights (100 vs 100), 12–13 min, deaths on: no divergence except one unexplained single-agent alive-set mismatch; effect latency p95 128–134 ms on loopback; emulated loss 2–5 % and 50–100 ms each way tolerated without divergence. Option A stays accepted; the remaining conditions are carried to Gate G3.

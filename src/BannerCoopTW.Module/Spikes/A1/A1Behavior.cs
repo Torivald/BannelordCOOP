@@ -149,8 +149,10 @@ namespace BannerCoopTW.Spikes.A1
             Log($"behaviour attached, role={(_host ? "host" : "client")}, agents={Mission.Agents.Count}, mode='{_mode}'");
             if (_host)
             {
-                var server = new LiteNetLibServerTransport();
-                ApplyNetEmulation(server.SimulateNetwork);
+                IServerTransport server = new LiteNetLibServerTransport();
+                var cond = ParseNetConditions();
+                if (cond.IsActive)
+                    server = new NetworkConditionServerTransport(server, cond, 1);
                 server.Listen(Port);
                 server.Connected += c => { _peer = c; _linked = true; Log("host: client connected " + c); };
                 server.Disconnected += (c, r) => { _linked = false; Log("host: client disconnected " + r); };
@@ -159,13 +161,15 @@ namespace BannerCoopTW.Spikes.A1
             }
             else
             {
-                var client = new LiteNetLibClientTransport();
+                IClientTransport client = new LiteNetLibClientTransport();
+                var cond = ParseNetConditions();
+                if (cond.IsActive)
+                    client = new NetworkConditionClientTransport(client, cond, 2);
                 client.Connected += c => { _peer = c; _linked = true; Log("client: connected to host"); };
                 client.Disconnected += (c, r) => { _linked = false; Log("client: disconnected " + r); };
                 client.DataReceived += (c, data, mode) => OnClientData(data);
                 client.Connect("127.0.0.1", Port);
                 _client = client;
-                ApplyNetEmulation(client.SimulateNetwork);
             }
         }
 
@@ -543,7 +547,7 @@ namespace BannerCoopTW.Spikes.A1
         {
             if (!_host)
             {
-                NoteClientRemoval(affectedAgent);
+                NoteClientRemoval(affectedAgent, agentState);
                 return;
             }
 

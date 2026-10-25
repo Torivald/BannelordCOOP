@@ -155,7 +155,10 @@ Campaign sync, save sync, matchmaking, NAT traversal, production servers, optimi
 - Tests actually run: game runs listed above; no new unit tests; `dotnet build -c Release` 0 errors.
 - Next: Phase 5/6 (campaign sync, battle start pipeline) toward a working multiplayer; manual vanilla crafted-item test; investigate the client transient when relevant.
 
-## 2026-10-25 — Spike A1b (branch `phase2d/spike-a1b`, research 0013) — PAUSED, not merged
-- Real 50 vs 50 fight, 13 min, deaths on: 5359 hits and 63 deaths replicated, alive/health host=client in all 156 windows, 0 local blows on the client, position error p50 0.15 / p95 0.29 m, no tick errors. Effect latency (not in melee) p95 128–134 ms < 150 ms; in melee the measurement was flawed (p95 324 ms), to be redone.
-- **Corrections:** all earlier "n100" runs were 100 vs 1 (shared troop-count array, fixed); the game pauses on window focus loss (`StopGameOnFocusLost`, host froze twice) — spike disables it, the product must too; LiteNetLib `Simulate*` has no effect in the referenced build → own `NetworkConditionTransport` (4 tests pass) written but **not wired**, so no network-emulation result exists.
-- FPS dip not reproduced; instrumentation in place. Verdict by architect-reviewer on A1b: **not obtained**. Next steps are listed at the end of research 0013.
+## 2026-10-25 — Spike A1b (branch `phase2d/spike-a1b`, research 0013) — PASS WITH CONDITIONS (architect-reviewer)
+- 100 vs 100 and 50 vs 50 fights, 12–13 min, deaths on, 60 fps cap on both windows: 124–178 deaths and ~4–5k hits replicated, no tick errors, no stalls, ack p50 ≈ 39 / p95 ≈ 53 ms, 44–77 KB/s. Input→visible-effect (client) p95 128–134 ms (< 150 ms) without emulation, n = 120–208 per run. ~100 agents alive only 2.5–3.25 min (75+ for 13 min in one run).
+- Emulated network (own decorator, loss 2 % / 5 %, 50–100 ms each way): no divergence, no stalls, effect p95 ≈ 320–333 ms (added RTT by construction).
+- Open: one unexplained alive-set divergence (soakD, 76 vs 75 for ~6 min, not repeated); first-session 36 s client dip unexplained; no repair path for missed removals; out-of-order snapshots not handled; effect-latency method is crude (see Review in 0013).
+- Corrections: earlier "n100" runs were 100 vs 1 (fixed); the game pauses on focus loss (`StopGameOnFocusLost`, host must keep it off); two windows on one PC need both capped (60 fps) or the second one starves; LiteNetLib `Simulate*` is a no-op in the referenced build → `NetworkConditionTransport` (4 tests).
+- Tests actually run: `dotnet test` Core 111, Networking 20 — all pass; game runs as in 0013. Not done: second PC, real network.
+- Next: Phase 5/6 toward a working multiplayer (owner priority); sieges after it. G3 conditions listed in 0013 "Review".

@@ -1,6 +1,6 @@
-# Research 0013 — Spike A1b (conditions of the Gate A1 verdict), PARTIAL — paused by the owner
+# Research 0013 — Spike A1b (conditions of the Gate A1 verdict)
 
-STATUS: **unfinished.** Written when the owner asked to stop (2026-10-25) and continue later. Gate A1b verdict by architect-reviewer **not obtained**; no PR merged for this branch. Field battle only (sieges are out of scope, `A1Siege` untouched). No second PC (owner).
+STATUS: done (second session, 2026-10-25, after a pause). Field battle only (sieges out of scope, `A1Siege` untouched); no second PC. First-session results are kept below; the second session's results are in "Results, second session" and supersede them where they differ.
 
 ## What was asked (MASTER_PLAN "A1b")
 1. Soak ≥ 10 min, ~100 agents, deaths **on**, host↔client divergence counters every 5 s. 2. ≥ 30 input→visible-effect samples (p95 < 150 ms). 3. Suppress client-local damage and count attempts. 4. Reproduce the client FPS dip (~36 s, 4–6 fps) and profile it. 5. Network emulation (2–5 % loss, 50–100 ms) with the same metrics.
@@ -38,3 +38,47 @@ v1.4.8.119303, one PC, two instances, loopback, 2026-10-25. Branch `phase2d/spik
 
 ## Tests actually run
 `dotnet build -c Release` 0 errors; `dotnet test` for `NetworkCondition*`: 4/4 pass (other test projects not re-run after the last change; they passed before it: Core 111, Networking 16). Game runs as listed above.
+
+
+---
+
+# Second session (after the pause) — supersedes the open items above
+
+## Additional findings
+4. **Test-harness artefact, not a mod problem: an uncapped host starves the second window.** After ~20:00 the client collapsed to 2–12 fps (ack 700–800 ms, hundreds of STALL lines) while the host ran at its 200 fps cap. It reproduced without emulation, with the committed (earlier good) build and with the old code — so it was the environment/GPU share, not code. Capping **both** windows at 60 fps (`engine_config.txt: max_framerate = 60`, set and restored by `run-a1.sh`) removed it completely (client 60.0 fps, min 56–57, in all later runs). The cause is **not proven**: GPU contention was never measured; Windows throttling of the background window or CPU scheduling fit equally well. It does not explain the first-session 36 s dip (there the host ran at ~77 fps, not 200, and apply cost per chunk rose ~200x), so that dip stays unexplained. Cost: with a 60 fps cap each side adds up to ~17 ms frame granularity to latency figures.
+5. **Network emulation now works** through our own decorator (wired into `A1Behavior.Initialise`; the useless LiteNetLib switches were removed). Added latency shows up exactly: ack p50 ≈ 197–200 ms (≈ 40 ms base + 2 × ~75 ms one-way mean).
+
+## Results, second session (60 fps cap, loopback, one PC)
+| Run | Setup | Result |
+|---|---|---|
+| netA3 | `n50:brawl:loss2:lat50-100` 6 min | host/client 60 fps, 0 STALL; **alive 0/71 mismatching windows, hp equal**, 57 deaths + 1551 hits replicated, 0 local blows; pos error p50 0.19 / p95 0.35 m; ack p50 197 / p95 234 ms; effect start p50 266 / p95 317 ms (n=101). |
+| netB3 | `n50:brawl:loss5:lat50-100` 6 min | 60 fps, 0 STALL; alive 0/71 mismatching, hp equal, 85 deaths; ack p50 200 / p95 236 ms; effect start p50 267 / p95 333 ms (n=101). Reliable events (deaths) never lost; no divergence even at 5 % loss. |
+| soakD | `n100:brawl`, 100 vs 100, no emulation, 13 min | 157 windows, both 60.0 fps (min 56.8), 0 tick errors, 0 STALL; 201 → 78 agents in 2.5 min (123 deaths), then 75–78 agents for the remaining ~10 min (≥ 100 agents for 3.25 min, ≥ 75 for the full 13 min); 4886 hits, 124 deaths; ack p50 39 / p95 53 ms; 77 KB/s; effect start n=120 p50 84 / p95 134 ms; **one divergence (the counted "local death" is any client removal without a host death message — routing, retreat or a fall would count too; not proven to be a death): from minute ~7 the client had one live agent less than the host (76/75) for the rest of the run** (73/157 windows with a mismatch, hp |d| 100 = one agent, `localDeaths = 1`, 0 local blows). No log of the removal (diagnostic added afterwards). |
+| soakE | same as soakD with diagnostic for local removals, 12 min | 146 windows, 60 fps, 0 STALL, 178 deaths, 4196 hits; **0 alive mismatches, 0 local deaths**; the fight ran down to 22 survivors (≥ 100 agents only 2.5 min); effect start n=208 p50 99 / p95 133 ms (enemy > 15 m: p95 134; melee: p95 117); stop p50 150 / p95 184. The soakD divergence did **not** recur, so its cause is unknown. |
+
+## Task status (final)
+1. Soak ≥ 10 min with deaths and counters: **done** (soakD/soakE 12–13 min, 124–178 deaths; ~100 agents held 2.5–3.25 min, 75+ agents 13 min in soakD). One unexplained alive-set divergence in soakD (a single client-side removal without host message, not repeated in soakE).
+2. ≥ 30 effect samples: **done**, 120–208 per run. **p95 128–134 ms (< 150 ms) without emulation**; melee does not worsen it any more once the script walks back and forth (the first-session 324 ms was the agent being blocked). Under emulated +RTT the figure is p95 ≈ 320–333 ms by construction.
+3. Local damage suppression/counting: **done** (counter validated in solo; 0 local blows in all synced runs).
+4. FPS dip: **explained as harness starvation** (finding 4), not reproduced after the cap; no code defect found.
+5. Network emulation: **done** (loss 2 % and 5 %, 50–100 ms each way, 6 min each): no divergence, no stalls, recovery not an issue; latency grows by the added delay as expected. Not tested: bursty loss, longer outages, reordering beyond jitter, asymmetric links, a real network.
+
+## Design requirements that fall out (for Phase 6/7)
+- Periodic **alive-set reconciliation**: the host should send the set of live agent ids every second (not only a count) so the client can detect and repair a missed or local removal (soakD); suppress client-local removals of mirrored agents.
+- Host must keep running unfocused (`StopGameOnFocusLost = false`) and test harnesses must cap fps of both windows.
+- Latency budget: base effect latency p50 ≈ 85–100 ms / p95 ≈ 130 ms on loopback at 60 fps; any real link adds its round trip on top, so on a 100 ms RTT link p95 ≈ 230 ms — client-side prediction for the controlled agent is likely needed for feel (not measured).
+- Interpolation of puppet positions and snapshot delta/compression remain open items for 7b (position error before correction p50 0.15–0.2 m / p95 0.3–0.4 m is from correction on every snapshot, with no interpolation).
+
+## Verdict
+See "Review" below.
+
+## Review (architect-reviewer, 2026-10-25): A1b = PASS WITH CONDITIONS; ADR-0006 option A stays accepted
+Per condition: C1 soak PASS WITH CONDITIONS (12–13 min with deaths, but ~100 agents only 2.5–3.25 min, so "10 min at 100 agents" was **not** met; one unexplained divergence); C2 latency PASS (p95 128–134 ms, n = 120–208, client→host→client); C3 local damage PASS with a caveat (counter validated, but a client-side removal got through in soakD, so suppression is not complete); C4 FPS dip PASS WITH CONDITIONS (mitigated by the cap, root cause unknown); C5 emulation PASS (receiving side only; a lost reliable packet is a fixed +300 ms).
+
+Corrections accepted from the review:
+- Effect latency = first snapshot with > 2 cm movement after the input edge; bumping in melee can trigger it early (melee p95 117 ms < far 134 ms), so "melee does not worsen it" is **not shown**; "near" only means an enemy within 15 m. The edge is stamped when the input packet is built, so the wait for the next 33 ms input send is not included. All figures are at a 60 fps cap.
+- "hp equal" is a weak check (the snapshot overwrites Health on every agent every 50 ms) and the alive check compares counts only, so two opposite errors would cancel.
+- The snapshot sequence number is read and discarded: under 50–100 ms jitter an older snapshot can be applied after a newer one (not handled, not measured).
+- A removed agent is skipped by `!a.IsActive()`, so nothing can repair a missed or local removal.
+
+Before Phase 6: this note corrected (done); focus-pause and fps-cap requirements recorded (above); `dotnet test` run after the last change — Core 111, Networking 20, all pass; `run-a1.sh` fixed (first backup kept, restore on any exit). Before Phase 7b / Gate G3: full alive-id set from the host every second plus a client repair path; drop out-of-order snapshots; find the soakD cause with the `LOCAL removal` log line; a run that keeps ~100 agents alive for 10 min (reinforcements); client uncapped while the host stays capped; knock-out and death of the controlled agent (it is set immortal here); a real network during playtests.

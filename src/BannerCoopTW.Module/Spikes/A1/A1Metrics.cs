@@ -20,25 +20,22 @@ namespace BannerCoopTW.Spikes.A1
     {
         // ---------- network emulation ----------
 
-        private void ApplyNetEmulation(Action<int, int, int> simulate)
+        private NetworkConditions ParseNetConditions()
         {
-            var loss = 0;
-            var min = 0;
-            var max = 0;
+            var c = new NetworkConditions();
             var m = Regex.Match(_mode, @"loss(\d+)");
             if (m.Success)
-                loss = int.Parse(m.Groups[1].Value);
+                c.LossPercent = int.Parse(m.Groups[1].Value);
             m = Regex.Match(_mode, @"lat(\d+)-(\d+)");
             if (m.Success)
             {
-                min = int.Parse(m.Groups[1].Value);
-                max = int.Parse(m.Groups[2].Value);
+                c.MinLatencyMs = int.Parse(m.Groups[1].Value);
+                c.MaxLatencyMs = int.Parse(m.Groups[2].Value);
             }
 
-            if (loss == 0 && max == 0)
-                return;
-            simulate(loss, min, max);
-            Log($"network emulation ON ({(_host ? "host" : "client")} side): packet loss {loss}%, latency {min}-{max} ms per direction");
+            if (c.IsActive)
+                Log($"network emulation ON ({(_host ? "host" : "client")} receive side, own decorator): packet loss {c.LossPercent}%, latency {c.MinLatencyMs}-{c.MaxLatencyMs} ms per direction");
+            return c;
         }
 
         // ---------- divergence (host stats once per second, compared on the client) ----------
@@ -131,12 +128,17 @@ namespace BannerCoopTW.Spikes.A1
             _localBlowDamage += b.InflictedDamage;
         }
 
-        private void NoteClientRemoval(Agent agent)
+        private void NoteClientRemoval(Agent agent, AgentState state)
         {
             if (!_running || _applyingHostDeath || !agent.IsHuman)
                 return;
             _localDeaths++;
             _localDeathsTotal++;
+            var hostIdx = -1;
+            foreach (var kv in _table)
+                if (kv.Value == agent)
+                    hostIdx = kv.Key;
+            Log($"client: LOCAL removal (state {state}) of agent local#{agent.Index} (host#{hostIdx}, {agent.Character?.StringId}) health={agent.Health:F0} pos={agent.Position} team={agent.Team?.Side} mount={agent.MountAgent != null} stack={Environment.StackTrace.Replace(Environment.NewLine, " | ").Substring(0, 700)}");
         }
 
         private void DivergenceWindowLog()
