@@ -31,3 +31,7 @@ __pycache__/
 
 # Test output
 TestResults/
+
+# Third-party closed mods kept locally for reference only (never commit, never decompile)
+3761555398/
+_thirdparty/
