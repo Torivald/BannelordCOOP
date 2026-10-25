@@ -43,7 +43,8 @@ namespace BannerCoopTW.Networking
         private readonly List<Item> _queue = new List<Item>();
         private long _seq;
         private long _lastReliableDue;
-        private long _dropped, _delayedReliable, _delivered;
+        private long _dropped, _delayedReliable, _delivered, _staleDropped;
+        private readonly Dictionary<int, long> _lastSequencedArrival = new Dictionary<int, long>();
 
         protected NetworkConditionTransportBase(ITransport inner, NetworkConditions conditions, int seed = 12345, Func<long>? nowMs = null)
         {
@@ -71,7 +72,10 @@ namespace BannerCoopTW.Networking
         public int LocalPort => _inner.LocalPort;
 
         /// <summary>Packets dropped / reliable packets delayed / packets delivered so far.</summary>
-        public string Counters => $"dropped={_dropped} reliableDelayed={_delayedReliable} delivered={_delivered}";
+        public string Counters => $"dropped={_dropped} staleSequenced={_staleDropped} reliableDelayed={_delayedReliable} delivered={_delivered}";
+
+        /// <summary>Sequenced packets discarded because a newer one had already been delivered (what LiteNetLib's Sequenced channel does on a jittery link).</summary>
+        public long StaleSequencedDropped => _staleDropped;
 
         protected ITransport Inner => _inner;
 
@@ -97,6 +101,18 @@ namespace BannerCoopTW.Networking
             _queue.RemoveRange(0, n);
             foreach (var item in ready)
             {
+                if (item.Mode == DeliveryMode.UnreliableSequenced)
+                {
+                    _lastSequencedArrival.TryGetValue(item.Connection.Value, out var last);
+                    if (item.Seq < last)
+                    {
+                        _staleDropped++; // sent earlier than a sequenced packet that was already delivered
+                        continue;
+                    }
+
+                    _lastSequencedArrival[item.Connection.Value] = item.Seq;
+                }
+
                 _delivered++;
                 DataReceived?.Invoke(item.Connection, item.Data, item.Mode);
             }
@@ -112,7 +128,7 @@ namespace BannerCoopTW.Networking
             }
 
             var lost = _conditions.LossPercent > 0 && _random.Next(100) < _conditions.LossPercent;
-            if (lost && mode == DeliveryMode.Unreliable)
+            if (lost && mode != DeliveryMode.ReliableOrdered)
             {
                 _dropped++;
                 return;

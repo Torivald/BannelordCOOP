@@ -81,6 +81,21 @@ namespace BannerCoopTW
                 }
             }
 
+            if (_config.SpikesEnabled && _config.SpikeL1.Length > 0 && _menuTime >= 0f)
+            {
+                _menuTime += dt;
+                try
+                {
+                    Spikes.L1.L1Driver.Tick(dt, _menuTime, TryBecomeSpikeHost);
+                }
+                catch (Exception e)
+                {
+                    _log?.Error("L1 driver failed", e);
+                }
+
+                return;
+            }
+
             if (_config.SpikesEnabled && _config.SpikeA1.Length > 0 && _menuTime >= 0f)
             {
                 _menuTime += dt;

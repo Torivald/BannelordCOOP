@@ -158,7 +158,7 @@ namespace BannerCoopTW.Spikes.A1
             var pe = Percentiles(_posErr);
             var meanHp = _statSamples > 0 ? _hpDeltaSum / _statSamples : 0.0;
             Log($"div: alive host/client={_lastHostAlive}/{_lastClientAlive} (|d| max {_aliveDeltaMax}, mismatching samples {_aliveMismatchSamples}/{_statSamples}) hp host/client={_lastHostHp:F0}/{_lastClientHp:F0} (|d| mean {meanHp:F1} max {_hpDeltaMax:F1}) " +
-                $"posErr p50/p95/max={pe.Item1:F2}/{pe.Item2:F2}/{pe.Item3:F2}m n={_posErr.Count} localBlows={_localBlows} (total {_localBlowsTotal}, dmg {_localBlowDamage:F0}) localDeaths={_localDeaths} (total {_localDeathsTotal})");
+                $"posErr p50/p95/max={pe.Item1:F2}/{pe.Item2:F2}/{pe.Item3:F2}m n={_posErr.Count} localBlows={_localBlows} (total {_localBlowsTotal}, dmg {_localBlowDamage:F0}) localDeaths={_localDeaths} (total {_localDeathsTotal}) staleSnapshotChunksDropped={_snapshotGate.Dropped}");
             EffectSummaryLog("run");
             Log($"gc: gen0/1/2 total={GC.CollectionCount(0)}/{GC.CollectionCount(1)}/{GC.CollectionCount(2)} managed={GC.GetTotalMemory(false) / 1048576}MB pollMax={_pollMaxMs:F1}ms rxPerFrameMax={_rxPerFrameMax} applyMax={_applyMaxMs:F2}ms");
             _statSamples = _aliveMismatchSamples = 0;

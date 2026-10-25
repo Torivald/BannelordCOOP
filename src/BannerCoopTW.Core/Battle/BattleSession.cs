@@ -493,6 +493,37 @@ namespace BannerCoopTW.Core.Battle
             }
         }
 
+        /// <summary>
+        /// Reconnect stub: a player who left (disconnect) comes back while the battle is still running. Their seat was freed when they left,
+        /// so they start again at Invited and choose side and slot anew. This is the only way out of the terminal Left phase.
+        /// </summary>
+        public SessionError Rejoin(PlayerId player)
+        {
+            lock (_gate)
+            {
+                try
+                {
+                    Sync();
+                    if (_ended)
+                        return SessionError.BattleClosed;
+                    if (!_players.TryGetValue(player, out var p))
+                        return SessionError.UnknownPlayer;
+                    if (p.Phase != PlayerPhase.Left)
+                        return SessionError.AlreadyInSession;
+                    if (_players.Values.Count(x => x.Phase != PlayerPhase.Left && x.Phase != PlayerPhase.Ended) >= _options.MaxParticipants)
+                        return SessionError.SessionFull;
+                    p.Phase = PlayerPhase.Invited;
+                    p.Side = null;
+                    Emit(SessionEventKind.PlayerPhaseChanged, player, null);
+                    return SessionError.None;
+                }
+                finally
+                {
+                    Sync();
+                }
+            }
+        }
+
         // ---------------------------------------------------------------- reinforcements, end, time
 
         /// <summary>More troops of an existing class arrived. Existing ownership is untouched.</summary>

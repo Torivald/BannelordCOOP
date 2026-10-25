@@ -122,6 +122,10 @@ namespace BannerCoopTW.Core.Protocol
                 case MessageType.SlotsChanged: return SlotsChanged.Read(r);
                 case MessageType.PlayerPhaseChanged: return PlayerPhaseChanged.Read(r);
                 case MessageType.BattleEnded: return BattleEnded.Read(r);
+                case MessageType.ReadyRequest: return ReadyRequest.Read(r);
+                case MessageType.LobbyUpdate: return LobbyUpdate.Read(r);
+                case MessageType.Ping: return Ping.Read(r);
+                case MessageType.Pong: return Pong.Read(r);
                 default: return null;
             }
         }
