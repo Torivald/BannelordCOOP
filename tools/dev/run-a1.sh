@@ -5,7 +5,7 @@ C="$USERPROFILE/Documents/Mount and Blade II Bannerlord/Configs/BannerCoopTW/con
 D="$USERPROFILE/Documents/Mount and Blade II Bannerlord/Logs/BannerCoopTW"
 rm -f "$D/spikes/role-host.lock" 2>/dev/null
 printf '# BannerCoopTW settings\nLogLevel=Info\nShowLoadedMessage=true\nSpikesEnabled=true\nSpikeA1=auto%s\n' "${1:+:$1}" > "$C"
-powershell -NoProfile -File "$(dirname "$0")/run-game.ps1" -Instances 2 2>&1 | grep -o 'PID [0-9]*'
+powershell -NoProfile -File "$(dirname "$0")/run-game.ps1" -Instances ${INSTANCES:-2} 2>&1 | grep -o 'PID [0-9]*'
 n=$(( ${2:-240} / 10 ))
 for i in $(seq 1 $n); do powershell -NoProfile -File "$(dirname "$0")/dismiss-safemode.ps1" >/dev/null 2>&1; sleep 10; done
 taskkill //IM Bannerlord.exe >/dev/null 2>&1; sleep 15; taskkill //IM Bannerlord.exe //F >/dev/null 2>&1

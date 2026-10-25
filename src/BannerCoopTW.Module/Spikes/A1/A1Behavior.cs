@@ -115,6 +115,8 @@ namespace BannerCoopTW.Spikes.A1
             var tickStart = _wall.Elapsed.TotalMilliseconds;
             try
             {
+                if (_mode.Contains("nodie"))
+                    Mission.DisableDying = true;
                 if (_mode.Contains("solo"))
                 {
                     SoloTick(dt);

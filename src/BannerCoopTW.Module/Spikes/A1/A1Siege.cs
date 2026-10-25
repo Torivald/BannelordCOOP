@@ -28,7 +28,7 @@ namespace BannerCoopTW.Spikes.A1
         }
 
         private readonly Dictionary<string, SiegeEntry> _siegeByKey = new Dictionary<string, SiegeEntry>();
-        private int _siegeSent, _siegeApplied, _siegeDiverged, _siegeUses;
+        private int _siegeSent, _siegeApplied, _siegeDiverged, _siegeUses, _siegeWrites;
         private bool _siegeUseDone;
 
         private static string SiegeKey(SiegeWeapon w) => w.GetType().Name + "|" + (w.GameEntity != null ? w.GameEntity.Name : "?");
@@ -87,7 +87,39 @@ namespace BannerCoopTW.Spikes.A1
             SiegeCollect();
             var matched = hostKeys.Count(k => _siegeByKey.ContainsKey(k));
             Log($"siege objects: host {count}, client {_siegeByKey.Count}, matched by (type, entity name) {matched}");
+            SiegePuppetize();
         }
+
+        /// <summary>
+        /// Client puppet mode: the object's own OnTick/OnTickParallel (state machine, AI usage, animation) is switched off through the public
+        /// <c>SetScriptComponentToTick(None)</c>; only host events move the state afterwards. Mode <c>nopuppetsiege</c> leaves the local logic running (old behaviour).
+        /// </summary>
+        private void SiegePuppetize()
+        {
+            if (_mode.Contains("nopuppetsiege"))
+            {
+                Log("siege puppet mode OFF (nopuppetsiege): local siege logic keeps running");
+                return;
+            }
+
+            var off = 0;
+            foreach (var e in _siegeByKey.Values)
+            {
+                try
+                {
+                    e.Weapon.SetScriptComponentToTick(TaleWorlds.Engine.ScriptComponentBehavior.TickRequirement.None);
+                    off++;
+                }
+                catch (Exception ex)
+                {
+                    Log("siege puppetize failed for " + e.Key + ": " + ex.Message);
+                }
+            }
+
+            Log($"siege puppet mode ON: local tick disabled on {off}/{_siegeByKey.Count} objects");
+        }
+
+        private static readonly System.Reflection.FieldInfo RangedStateField = typeof(RangedSiegeWeapon).GetField("_state", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
 
         private void SiegeHostTick()
         {
@@ -159,10 +191,21 @@ namespace BannerCoopTW.Spikes.A1
                 _siegeDiverged++; // the client's own machine logic moved the object away from the last host state
             if (local != state && !_mode.Contains("nostate"))
             {
+                // logged before the write: a native crash leaves this line as the last one
+                Log($"client: siege write {key} state {local} -> {state}{(!_mode.Contains("setter") ? " (raw)" : string.Empty)}");
                 if (e.Weapon is SiegeLadder ladder)
+                {
                     ladder.State = (SiegeLadder.LadderState)state;
+                }
                 else if (e.Weapon is RangedSiegeWeapon ranged && !_mode.Contains("noranged"))
-                    ranged.State = (RangedSiegeWeapon.WeaponState)state;
+                {
+                    if (!_mode.Contains("setter") && RangedStateField != null)
+                        RangedStateField.SetValue(ranged, (RangedSiegeWeapon.WeaponState)state); // only the value: in single player the setter runs the server branch and fires a projectile on the client (research 0012); mode 'setter' = old behaviour
+                    else
+                        ranged.State = (RangedSiegeWeapon.WeaponState)state;
+                }
+
+                _siegeWrites++;
             }
 
             e.LastState = state;
