@@ -8,7 +8,9 @@
 param(
     [int]$Instances = 1,
     # Adds the stock Multiplayer module (S2 experiment: its OnSubModuleLoad initialises GameNetwork and NetworkMain.SetPeers).
-    [switch]$WithMultiplayer
+    [switch]$WithMultiplayer,
+    # Positive control for option B: stock multiplayer client, no mods (Native + Multiplayer only), lobby login through Steam.
+    [switch]$StockMultiplayer
 )
 $ErrorActionPreference = 'Stop'
 
@@ -18,9 +20,11 @@ if (-not (Test-Path (Join-Path $bin 'Bannerlord.exe'))) { throw "mb2 junction mi
 
 $mp = if ($WithMultiplayer) { 'Multiplayer*' } else { '' }
 $modules = "_MODULES_*Bannerlord.Harmony*Native*${mp}SandBoxCore*Sandbox*CustomBattle*StoryMode*BannerCoopTW*_MODULES_"
+$args2 = "/singleplayer $modules"
+if ($StockMultiplayer) { $args2 = '/multiplayer _MODULES_*Native*Multiplayer*_MODULES_' }
 for ($i = 0; $i -lt $Instances; $i++) {
     if ($i -gt 0) { Start-Sleep -Seconds 20 }
-    $p = Start-Process -FilePath (Join-Path $bin 'Bannerlord.exe') -ArgumentList "/singleplayer $modules" -WorkingDirectory $bin -PassThru
+    $p = Start-Process -FilePath (Join-Path $bin 'Bannerlord.exe') -ArgumentList $args2 -WorkingDirectory $bin -PassThru
     Write-Host "Started Bannerlord PID $($p.Id) -> log: C:\ProgramData\Mount and Blade II Bannerlord\logs\rgl_log_$($p.Id).txt"
 }
 Write-Host "Mod log: $([Environment]::GetFolderPath('MyDocuments'))\Mount and Blade II Bannerlord\Logs\BannerCoopTW\"

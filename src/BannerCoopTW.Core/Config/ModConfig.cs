@@ -32,6 +32,9 @@ namespace BannerCoopTW.Core.Config
 
         public string SpikeAutoRunClient { get; set; } = string.Empty;
 
+        /// <summary>Spike A1 automation: <c>auto</c> = at the main menu start a Custom Battle on both instances (host/client by role election) and run the mission sync. Empty = off.</summary>
+        public string SpikeA1 { get; set; } = string.Empty;
+
         public List<string> Problems { get; } = new List<string>();
 
         public static ModConfig Parse(string text)
@@ -87,6 +90,7 @@ namespace BannerCoopTW.Core.Config
             sb.Append("SpikeAutoRun=").Append(SpikeAutoRun).Append('\n');
             sb.Append("SpikeAutoRunHost=").Append(SpikeAutoRunHost).Append('\n');
             sb.Append("SpikeAutoRunClient=").Append(SpikeAutoRunClient).Append('\n');
+            sb.Append("SpikeA1=").Append(SpikeA1).Append('\n');
             return sb.ToString();
         }
 
@@ -117,6 +121,9 @@ namespace BannerCoopTW.Core.Config
                     return true;
                 case "spikeautorunclient":
                     SpikeAutoRunClient = value;
+                    return true;
+                case "spikea1":
+                    SpikeA1 = value;
                     return true;
                 case "spikeautorun":
                     SpikeAutoRun = value;
